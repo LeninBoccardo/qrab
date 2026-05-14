@@ -1,16 +1,34 @@
-# QRScreen — Project Guide for Claude
+# CLAUDE.md
 
-This file is the canonical context for any Claude session working on this project. Read it fully before writing code or making architectural decisions. If something here conflicts with what the user asks, ask before overriding.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+It is the canonical context for any Claude session working on this project. Read it fully before writing code or making architectural decisions. If something here conflicts with what the user asks, ask before overriding.
 
 ---
 
 ## 1. What we're building
 
-**QRScreen** is a lightweight desktop utility that captures QR codes visible anywhere on the user's screen and decodes them to text/URLs — solving the problem of needing to point a phone camera at a QR code that's already on the PC. The app handles "readable" codes (links, plain text, Wi-Fi, vCards). Codes that require a phone (mobile-only auth flows, app-bound credentials) are out of scope by design.
+**qrab** is a lightweight desktop utility that captures QR codes visible anywhere on the user's screen and decodes them to text/URLs — solving the problem of needing to point a phone camera at a QR code that's already on the PC. The app handles "readable" codes (links, plain text, Wi-Fi, vCards). Codes that require a phone (mobile-only auth flows, app-bound credentials) are out of scope by design.
 
 Core promise: **press a hotkey → see the decoded content within a second → copy or open it**. No friction, no setup per scan.
 
 This project is also a **portfolio piece**. Code quality, commit hygiene, README, and architecture diagrams matter — but not at the cost of over-engineering. Clean and small beats clever and abstract.
+
+---
+
+## 1.5. Current state (as of 2026-05-14)
+
+**Phase 0 — fresh `create-tauri-app` scaffold.** Only the boilerplate `greet` command exists in `src-tauri/src/lib.rs`; `src/App.tsx` is the template demo. None of the QR-related modules (capture, decoder, storage, tray, hotkey, settings, windows) exist yet. Next step: Phase 1 from §14.
+
+What's already in place:
+- Tauri 2, Solid, TypeScript, Vite scaffolding from `create-tauri-app`.
+- `@kobalte/core`, `lucide-solid`, `tailwindcss` v4 + `@tailwindcss/vite` installed.
+- `tauri-plugin-opener` wired up; no other Tauri plugins yet.
+
+What's planned but not installed:
+- All Rust crates listed in §3 except `tauri`, `tauri-plugin-opener`, `serde`, `serde_json` will be added as their phase begins. The §3 list is aspirational, not preinstalled.
+- `@kobalte/tailwindcss` (used in §11) — install when starting Phase 1 UI.
+- Scripts in §12 beyond `dev`/`build`/`tauri`/`start`/`serve` — `package.json` currently has none of the format/lint/test scripts. Run them directly via `cargo` / `npx` until added.
 
 ---
 
@@ -145,11 +163,11 @@ The full screenshot is held in memory only between capture and dismissal of the 
 ## 6. Project structure
 
 ```
-qrscreen/
+qrab/
 ├── CLAUDE.md                       ← this file
 ├── README.md                       ← portfolio-quality, with screenshots
 ├── package.json
-├── pnpm-lock.yaml                  ← prefer pnpm
+├── package-lock.json               ← npm
 ├── vite.config.ts
 ├── tsconfig.json
 ├── tailwind.config.ts
@@ -252,7 +270,7 @@ Use SQLite's `PRAGMA user_version` for schema versioning. On app start, read `us
 
 ### Database location
 
-`tauri::Manager::path().app_data_dir()? / "qrscreen.db"`. Enable WAL mode on first open (`PRAGMA journal_mode=WAL`) for better concurrent reads. The DB is held as `Arc<Mutex<Connection>>` in Tauri state — single connection is fine for this app's volume.
+`tauri::Manager::path().app_data_dir()? / "qrab.db"`. Enable WAL mode on first open (`PRAGMA journal_mode=WAL`) for better concurrent reads. The DB is held as `Arc<Mutex<Connection>>` in Tauri state — single connection is fine for this app's volume.
 
 ### Rust ↔ TS types
 
@@ -489,26 +507,29 @@ These are not suggestions — follow them so the codebase stays consistent.
 ## 12. Development commands
 
 ```bash
-# install deps (pnpm preferred)
-pnpm install
+# install deps
+npm install
 
-# dev mode (hot reload)
-pnpm tauri dev
+# dev mode (hot reload) — runs Vite + Tauri together
+npm run tauri dev
 
 # production build
-pnpm tauri build
+npm run tauri build
 
 # format/lint
 cargo fmt --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
-pnpm prettier --write src/
-pnpm tsc --noEmit
+npx prettier --write src/
+npx tsc --noEmit
 
 # tests (Rust)
 cargo test --manifest-path src-tauri/Cargo.toml
+
+# run a single Rust test (substring match on test name)
+cargo test --manifest-path src-tauri/Cargo.toml -- <test_name_substring>
 ```
 
-Add these to `package.json` scripts.
+Add these to `package.json` scripts as they get used regularly. Current scripts are minimal: `start`, `dev`, `build`, `serve`, `tauri` — the format/lint/test commands above are not yet wired up.
 
 ---
 
@@ -538,7 +559,7 @@ Add these to `package.json` scripts.
 Don't skip ahead. Each phase ends with a functional, commitable, demoable state.
 
 **Phase 1: MVP capture-decode-display**
-1. Scaffold project (`pnpm create tauri-app` → Solid + TypeScript). Add Tailwind v4, dark mode.
+1. ✅ Scaffold project (`npm create tauri-app` → Solid + TypeScript) — done. Add Tailwind v4 + dark mode wiring (Tailwind installed, not yet configured).
 2. Define `Capturer` and `Decoder` traits with production impls.
 3. Implement `scan_screen` command end-to-end: capture all monitors → decode → return results (in-memory only, no DB yet).
 4. Build the results window (single + multi result display, copy, open).
