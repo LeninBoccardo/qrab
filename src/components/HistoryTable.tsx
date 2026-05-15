@@ -1,0 +1,158 @@
+import { Component, createEffect, For, Show } from "solid-js";
+import { Dynamic } from "solid-js/web";
+import { Copy, ExternalLink, Trash2 } from "lucide-solid";
+import type { ScanRow } from "../lib/types";
+import { isOpenable, kindIcon, kindLabel } from "../lib/classify";
+import { absoluteTime, relativeTime } from "../lib/format";
+
+interface HistoryTableProps {
+  rows: ScanRow[];
+  selected: Set<number>;
+  onToggleSelect: (id: number) => void;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
+  onCopy: (row: ScanRow) => void;
+  onOpen: (row: ScanRow) => void;
+  onDelete: (id: number) => void;
+}
+
+export const HistoryTable: Component<HistoryTableProps> = (props) => {
+  const allSelected = (): boolean =>
+    props.rows.length > 0 && props.rows.every((r) => props.selected.has(r.id));
+  const someSelected = (): boolean =>
+    props.rows.some((r) => props.selected.has(r.id));
+
+  function toggleAll(): void {
+    if (allSelected()) props.onClearSelection();
+    else props.onSelectAll();
+  }
+
+  // <input>.indeterminate is a property, not a markup attribute, so set it
+  // through a ref after each render rather than via a JSX prop.
+  let headerCheckbox: HTMLInputElement | undefined;
+  createEffect(() => {
+    if (headerCheckbox) {
+      headerCheckbox.indeterminate = someSelected() && !allSelected();
+    }
+  });
+
+  return (
+    <table class="w-full text-sm">
+      <thead class="sticky top-0 bg-neutral-100/95 text-left text-xs uppercase text-neutral-500 backdrop-blur dark:bg-neutral-900/95 dark:text-neutral-400">
+        <tr>
+          <th class="w-10 px-3 py-2">
+            <input
+              ref={headerCheckbox}
+              type="checkbox"
+              checked={allSelected()}
+              onChange={toggleAll}
+              aria-label="Select all visible"
+            />
+          </th>
+          <th class="w-24 px-2 py-2">Kind</th>
+          <th class="px-2 py-2">Content</th>
+          <th class="w-32 px-2 py-2">Scanned</th>
+          <th class="w-20 px-2 py-2">Opened</th>
+          <th class="w-32 px-2 py-2 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <Show
+          when={props.rows.length > 0}
+          fallback={
+            <tr>
+              <td
+                colspan={6}
+                class="px-3 py-12 text-center text-sm text-neutral-500"
+              >
+                No rows match the current filters.
+              </td>
+            </tr>
+          }
+        >
+          <For each={props.rows}>
+            {(row) => (
+              <tr class="border-t border-neutral-200/40 hover:bg-neutral-50 dark:border-neutral-800/40 dark:hover:bg-neutral-900/50">
+                <td class="px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={props.selected.has(row.id)}
+                    onChange={() => props.onToggleSelect(row.id)}
+                    aria-label="Select row"
+                  />
+                </td>
+                <td class="px-2 py-2">
+                  <div class="inline-flex items-center gap-1.5 text-neutral-600 dark:text-neutral-300">
+                    <Dynamic component={kindIcon(row.kind)} size={14} />
+                    <span class="text-xs">{kindLabel(row.kind)}</span>
+                  </div>
+                </td>
+                <td class="px-2 py-2">
+                  <div
+                    class="max-w-[400px] truncate"
+                    title={row.content}
+                  >
+                    {row.content}
+                  </div>
+                </td>
+                <td
+                  class="px-2 py-2 text-xs text-neutral-500"
+                  title={absoluteTime(row.scannedAt)}
+                >
+                  {relativeTime(row.scannedAt)}
+                </td>
+                <td class="px-2 py-2 text-xs">
+                  <Show
+                    when={row.opened}
+                    fallback={<span class="text-neutral-400">—</span>}
+                  >
+                    <span
+                      class="text-green-600 dark:text-green-400"
+                      title={
+                        row.openedAt !== null
+                          ? absoluteTime(row.openedAt)
+                          : undefined
+                      }
+                    >
+                      Yes
+                    </span>
+                  </Show>
+                </td>
+                <td class="px-2 py-2 text-right">
+                  <div class="inline-flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      class="rounded p-1 text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+                      onClick={() => props.onCopy(row)}
+                      aria-label="Copy"
+                    >
+                      <Copy size={14} />
+                    </button>
+                    <Show when={isOpenable(row.kind)}>
+                      <button
+                        type="button"
+                        class="rounded p-1 text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+                        onClick={() => props.onOpen(row)}
+                        aria-label="Open"
+                      >
+                        <ExternalLink size={14} />
+                      </button>
+                    </Show>
+                    <button
+                      type="button"
+                      class="rounded p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30"
+                      onClick={() => props.onDelete(row.id)}
+                      aria-label="Delete"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </For>
+        </Show>
+      </tbody>
+    </table>
+  );
+};

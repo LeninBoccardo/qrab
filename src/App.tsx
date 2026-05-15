@@ -6,6 +6,7 @@ import {
   onMount,
   Switch,
 } from "solid-js";
+import { HistoryWindow } from "./windows/HistoryWindow";
 import { RegionSelectWindow } from "./windows/RegionSelectWindow";
 import { ResultsWindow } from "./windows/ResultsWindow";
 
@@ -32,7 +33,10 @@ const App: Component = () => {
       <Match when={route() === "region"}>
         <RegionSelectWindow />
       </Match>
-      {/* Future routes: #history (C14), #settings (C19) */}
+      <Match when={route() === "history"}>
+        <HistoryWindow />
+      </Match>
+      {/* Future routes: #settings (C19) */}
     </Switch>
   );
 };
