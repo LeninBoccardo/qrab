@@ -17,7 +17,6 @@ use crate::storage::queries::{
 use crate::storage::Storage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -67,6 +66,7 @@ pub struct RegionBounds {
 pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, String> {
     let capturer = state.capturer.clone();
     let decoder = state.decoder.clone();
+    let storage = state.storage.clone();
     let store = state.screenshots.clone();
 
     let monitors: Vec<MonitorImage> =
@@ -79,23 +79,25 @@ pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, Strin
     let screenshot_id = Ulid::new().to_string();
     let batch_id = Ulid::new().to_string();
 
-    // Decode in spawn_blocking; the closure returns (rows, monitors) so the
-    // images survive to be put in the screenshot store for region-select.
-    let (mut rows, monitors) = tokio::task::spawn_blocking(move || {
-        let rows = decode_monitors(decoder.as_ref(), &monitors, &batch_id, scanned_at);
-        (rows, monitors)
-    })
-    .await
-    .map_err(|e| format!("decode task panicked: {e}"))?;
+    // Decode + persist on the blocking pool — SQLite writes are sync and
+    // were previously running on the async runtime, holding a worker for
+    // the duration of the transaction. Returning `monitors` from the
+    // closure lets us still feed them to the screenshot store afterward.
+    let (rows, monitors) =
+        tokio::task::spawn_blocking(move || -> Result<(Vec<ScanRow>, Vec<MonitorImage>), String> {
+            let mut rows =
+                decode_monitors(decoder.as_ref(), &monitors, &batch_id, scanned_at);
+            persist_rows(&storage, &mut rows)?;
+            Ok((rows, monitors))
+        })
+        .await
+        .map_err(|e| format!("decode task panicked: {e}"))??;
 
-    // Persist matches and fill in the real DB IDs.
-    persist_rows(&state.storage, &mut rows)?;
-
-    store.put(HeldScreenshot {
-        id: screenshot_id.clone(),
+    store.put(HeldScreenshot::new(
+        screenshot_id.clone(),
         monitors,
-        taken_at: Instant::now(),
-    });
+        Instant::now(),
+    ));
 
     Ok(ScanResult { rows, screenshot_id })
 }
@@ -117,10 +119,13 @@ pub async fn scan_region(
         .get_if_id(&screenshot_id)
         .ok_or_else(|| "screenshot not found or expired".to_string())?;
     let decoder = state.decoder.clone();
+    let storage = state.storage.clone();
     let scanned_at = current_epoch_ms();
     let batch_id = Ulid::new().to_string();
 
-    let mut rows: Vec<ScanRow> = tokio::task::spawn_blocking(
+    // Crop + decode + persist all happen on the blocking pool so the
+    // SQLite insert doesn't park the async runtime.
+    let rows: Vec<ScanRow> = tokio::task::spawn_blocking(
         move || -> Result<Vec<ScanRow>, String> {
             let monitor = held
                 .monitors
@@ -132,19 +137,19 @@ pub async fn scan_region(
                         bounds.monitor_index
                     )
                 })?;
-            decode_region(
+            let mut rows = decode_region(
                 decoder.as_ref(),
                 &monitor.image,
                 &bounds,
                 &batch_id,
                 scanned_at,
-            )
+            )?;
+            persist_rows(&storage, &mut rows)?;
+            Ok(rows)
         },
     )
     .await
     .map_err(|e| format!("region decode task panicked: {e}"))??;
-
-    persist_rows(&state.storage, &mut rows)?;
 
     Ok(ScanResult { rows, screenshot_id })
 }
@@ -236,18 +241,23 @@ pub async fn open_url(
     state: State<'_, AppState>,
     id: i64,
 ) -> Result<(), String> {
-    let row = get_by_id(&state.storage, id)
-        .map_err(|e| format!("storage: {e}"))?
-        .ok_or_else(|| format!("row {id} not found"))?;
-    if row.kind != QrKind::Url {
-        return Err(format!("row {id} is not a URL ({:?})", row.kind));
-    }
-    app.opener()
-        .open_url(&row.content, None::<&str>)
-        .map_err(|e| e.to_string())?;
-    mark_opened_db(&state.storage, id, current_epoch_ms())
-        .map_err(|e| format!("storage: {e}"))?;
-    Ok(())
+    let storage = state.storage.clone();
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let row = get_by_id(&storage, id)
+            .map_err(|e| format!("storage: {e}"))?
+            .ok_or_else(|| format!("row {id} not found"))?;
+        if row.kind != QrKind::Url {
+            return Err(format!("row {id} is not a URL ({:?})", row.kind));
+        }
+        app.opener()
+            .open_url(&row.content, None::<&str>)
+            .map_err(|e| e.to_string())?;
+        mark_opened_db(&storage, id, current_epoch_ms())
+            .map_err(|e| format!("storage: {e}"))?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("open task panicked: {e}"))?
 }
 
 /// Run a paginated history query.
@@ -256,7 +266,10 @@ pub async fn history_query(
     state: State<'_, AppState>,
     filter: HistoryFilter,
 ) -> Result<Vec<ScanRow>, String> {
-    history_query_db(&state.storage, &filter)
+    let storage = state.storage.clone();
+    tokio::task::spawn_blocking(move || history_query_db(&storage, &filter))
+        .await
+        .map_err(|e| format!("history task panicked: {e}"))?
         .map_err(|e| format!("storage: {e}"))
 }
 
@@ -266,14 +279,22 @@ pub async fn history_delete(
     state: State<'_, AppState>,
     id: i64,
 ) -> Result<(), String> {
-    delete_by_id(&state.storage, id).map_err(|e| format!("storage: {e}"))?;
+    let storage = state.storage.clone();
+    tokio::task::spawn_blocking(move || delete_by_id(&storage, id))
+        .await
+        .map_err(|e| format!("history task panicked: {e}"))?
+        .map_err(|e| format!("storage: {e}"))?;
     Ok(())
 }
 
 /// Wipe the whole history table.
 #[tauri::command]
 pub async fn history_clear(state: State<'_, AppState>) -> Result<(), String> {
-    delete_all(&state.storage).map_err(|e| format!("storage: {e}"))?;
+    let storage = state.storage.clone();
+    tokio::task::spawn_blocking(move || delete_all(&storage))
+        .await
+        .map_err(|e| format!("history task panicked: {e}"))?
+        .map_err(|e| format!("storage: {e}"))?;
     Ok(())
 }
 
@@ -308,46 +329,51 @@ pub async fn open_urls_bulk(
     ids: Vec<i64>,
     confirmed: bool,
 ) -> Result<BulkOpenResult, String> {
-    // Resolve rows up front so the count check uses URLs only — non-URL
-    // rows in the selection don't tab-bomb the threshold.
-    let mut url_rows: Vec<(i64, String)> = Vec::with_capacity(ids.len());
-    let mut skipped_non_url = 0usize;
-    for id in &ids {
-        let row = get_by_id(&state.storage, *id)
-            .map_err(|e| format!("storage: {e}"))?
-            .ok_or_else(|| format!("row {id} not found"))?;
-        if row.kind == QrKind::Url {
-            url_rows.push((*id, row.content));
-        } else {
-            skipped_non_url += 1;
-        }
-    }
-
-    if url_rows.len() > BULK_OPEN_CONFIRM_THRESHOLD && !confirmed {
-        return Err(format!(
-            "Confirmation required for opening more than {} URLs",
-            BULK_OPEN_CONFIRM_THRESHOLD
-        ));
-    }
-
-    let now_ms = current_epoch_ms();
-    let opener = app.opener();
-    let mut opened = Vec::new();
-    let mut failed = Vec::new();
-
-    for (id, url) in url_rows {
-        match opener.open_url(&url, None::<&str>) {
-            Ok(()) => {
-                if let Err(e) = mark_opened_db(&state.storage, id, now_ms) {
-                    log::warn!("mark_opened failed for {id}: {e}");
-                }
-                opened.push(id);
+    let storage = state.storage.clone();
+    tokio::task::spawn_blocking(move || -> Result<BulkOpenResult, String> {
+        // Resolve rows up front so the count check uses URLs only — non-URL
+        // rows in the selection don't tab-bomb the threshold.
+        let mut url_rows: Vec<(i64, String)> = Vec::with_capacity(ids.len());
+        let mut skipped_non_url = 0usize;
+        for id in &ids {
+            let row = get_by_id(&storage, *id)
+                .map_err(|e| format!("storage: {e}"))?
+                .ok_or_else(|| format!("row {id} not found"))?;
+            if row.kind == QrKind::Url {
+                url_rows.push((*id, row.content));
+            } else {
+                skipped_non_url += 1;
             }
-            Err(e) => failed.push(BulkOpenFailure { id, error: e.to_string() }),
         }
-    }
 
-    Ok(BulkOpenResult { opened, failed, skipped_non_url })
+        if url_rows.len() > BULK_OPEN_CONFIRM_THRESHOLD && !confirmed {
+            return Err(format!(
+                "Confirmation required for opening more than {} URLs",
+                BULK_OPEN_CONFIRM_THRESHOLD
+            ));
+        }
+
+        let now_ms = current_epoch_ms();
+        let opener = app.opener();
+        let mut opened = Vec::new();
+        let mut failed = Vec::new();
+
+        for (id, url) in url_rows {
+            match opener.open_url(&url, None::<&str>) {
+                Ok(()) => {
+                    if let Err(e) = mark_opened_db(&storage, id, now_ms) {
+                        log::warn!("mark_opened failed for {id}: {e}");
+                    }
+                    opened.push(id);
+                }
+                Err(e) => failed.push(BulkOpenFailure { id, error: e.to_string() }),
+            }
+        }
+
+        Ok(BulkOpenResult { opened, failed, skipped_non_url })
+    })
+    .await
+    .map_err(|e| format!("open task panicked: {e}"))?
 }
 
 /// Hide the results window. Bound to Esc and the titlebar Close button.
@@ -432,6 +458,10 @@ pub async fn get_screenshot_monitors(
 
 /// Return one monitor's image as a PNG, served as a binary Tauri response
 /// (no base64 inflation). The frontend wraps the result in a Blob URL.
+///
+/// The PNG bytes are cached inside the held screenshot, so repeated calls
+/// for the same monitor (e.g. user toggling monitors in the region
+/// selector) hit a cheap Arc clone rather than re-encoding.
 #[tauri::command]
 pub async fn get_screenshot_monitor_png(
     state: State<'_, AppState>,
@@ -442,24 +472,10 @@ pub async fn get_screenshot_monitor_png(
         .screenshots
         .get_if_id(&screenshot_id)
         .ok_or_else(|| "screenshot not found or expired".to_string())?;
-    let bytes = tokio::task::spawn_blocking(
-        move || -> Result<Vec<u8>, String> {
-            let monitor = held
-                .monitors
-                .iter()
-                .find(|m| m.index == monitor_index)
-                .ok_or_else(|| {
-                    format!("monitor index {monitor_index} not in screenshot")
-                })?;
-            let dyn_img =
-                image::DynamicImage::ImageRgba8(monitor.image.clone());
-            let mut buf = Cursor::new(Vec::<u8>::new());
-            dyn_img
-                .write_to(&mut buf, image::ImageFormat::Png)
-                .map_err(|e| format!("png encode: {e}"))?;
-            Ok(buf.into_inner())
-        },
-    )
+    let bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>, String> {
+        let arc = held.png_for(monitor_index)?;
+        Ok((*arc).clone())
+    })
     .await
     .map_err(|e| format!("encode task panicked: {e}"))??;
     Ok(Response::new(bytes))

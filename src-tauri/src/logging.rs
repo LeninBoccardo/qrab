@@ -24,10 +24,12 @@ pub fn build_plugin() -> TauriPlugin<Wry> {
     let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S").to_string();
     let file_name = format!("qrab-{timestamp}");
 
-    let mut targets: Vec<Target> = vec![
-        Target::new(TargetKind::Stdout),
-        Target::new(TargetKind::Webview),
-    ];
+    let mut targets: Vec<Target> = vec![Target::new(TargetKind::Webview)];
+    // Stdout target is debug-only — release builds use `windows_subsystem
+    // = "windows"`, so stdout writes to a dead handle. Avoid the per-log
+    // syscall overhead in production.
+    #[cfg(debug_assertions)]
+    targets.push(Target::new(TargetKind::Stdout));
     if dir_ready {
         targets.push(Target::new(TargetKind::Folder {
             path: dir,

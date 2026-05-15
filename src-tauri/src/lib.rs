@@ -94,10 +94,17 @@ pub fn run() {
 
             if let Some(window) = app.get_webview_window(windows::RESULTS_WINDOW) {
                 let to_hide = window.clone();
+                let screenshots_on_close = screenshots.clone();
                 window.on_window_event(move |event| {
                     if let WindowEvent::CloseRequested { api, .. } = event {
                         api.prevent_close();
                         let _ = to_hide.hide();
+                        // CLAUDE.md §9: held screenshot is freed when the
+                        // window closes. With one Tauri webview + hash
+                        // routing, "the window closes" maps to this event.
+                        // Reclaims ~24-64 MB immediately rather than
+                        // waiting for the 60s TTL watcher to catch up.
+                        screenshots_on_close.clear();
                     }
                 });
             }

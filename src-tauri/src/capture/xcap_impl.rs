@@ -2,6 +2,12 @@ use super::{CaptureError, Capturer, MonitorImage};
 use xcap::Monitor;
 
 /// Production [`Capturer`] backed by the `xcap` crate.
+///
+/// Note: monitor capture runs sequentially because `xcap::Monitor` is not
+/// `Send` on Windows (it holds an HMONITOR raw pointer). Parallelizing
+/// would need either platform-specific unsafe transport of the handles or
+/// an upstream change to xcap. Sequential scan latency is acceptable for
+/// the hotkey-driven workflow.
 #[derive(Default)]
 pub struct XcapCapturer;
 
