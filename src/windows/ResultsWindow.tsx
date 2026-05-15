@@ -12,6 +12,7 @@ import { ScanLine } from "lucide-solid";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { ResultCard } from "../components/ResultCard";
 import { EmptyState } from "../components/EmptyState";
+import { Titlebar } from "../components/Titlebar";
 import { Button } from "../components/ui/Button";
 import {
   consumePendingScan,
@@ -104,18 +105,17 @@ export const ResultsWindow: Component = () => {
   });
 
   return (
-    <main class="flex h-full flex-col gap-3 p-4">
-      <header class="flex items-center justify-between">
-        <h1 class="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
-          qrab
-        </h1>
+    <main class="flex h-full flex-col">
+      <Titlebar onClose={() => void hideResultsWindow()} />
+
+      <div class="flex shrink-0 items-center justify-end border-b border-neutral-200/60 px-3 py-1.5 dark:border-neutral-800/60">
         <Button variant="primary" onClick={scan} disabled={loading()}>
           <ScanLine size={16} />
           {loading() ? "Scanning…" : "Scan now"}
         </Button>
-      </header>
+      </div>
 
-      <div class="min-h-0 flex-1 overflow-auto">
+      <div class="min-h-0 flex-1 overflow-auto p-3">
         <Show
           when={rows().length > 0}
           fallback={
@@ -123,7 +123,8 @@ export const ResultsWindow: Component = () => {
               when={hasScanned()}
               fallback={
                 <div class="flex h-full items-center justify-center text-sm text-neutral-500 dark:text-neutral-400">
-                  Press Scan now to find QR codes on your screen.
+                  Press the hotkey (Ctrl+Shift+Q) or Scan now to find QR codes
+                  on your screen.
                 </div>
               }
             >
