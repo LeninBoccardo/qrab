@@ -1,0 +1,131 @@
+//! In-memory store for the most recent captured screenshot.
+//!
+//! [`scan_screen`](crate::commands::scan_screen) puts the captured monitor
+//! images here keyed by a generated `screenshot_id`; `scan_region` (C8)
+//! will look up that id, crop the held image, and decode the crop.
+//!
+//! Only the *latest* screenshot is kept — a fresh scan replaces the prior
+//! one. The image is also cleared after [`TTL`] elapses so we don't sit
+//! on tens of megabytes of pixels indefinitely.
+
+use crate::capture::MonitorImage;
+use std::sync::{Arc, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
+
+/// How long a held screenshot stays in memory if no `scan_region` uses it.
+pub const TTL: Duration = Duration::from_secs(60);
+
+pub struct HeldScreenshot {
+    pub id: String,
+    pub monitors: Vec<MonitorImage>,
+    pub taken_at: Instant,
+}
+
+/// Cloneable, thread-safe handle to the at-most-one held screenshot.
+#[derive(Clone, Default)]
+pub struct ScreenshotStore {
+    inner: Arc<Mutex<Option<Arc<HeldScreenshot>>>>,
+}
+
+impl ScreenshotStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn put(&self, held: HeldScreenshot) {
+        *self.lock() = Some(Arc::new(held));
+    }
+
+    /// Return the held screenshot iff its id matches. Cheap — clones an
+    /// `Arc`, not the pixel buffers.
+    pub fn get_if_id(&self, id: &str) -> Option<Arc<HeldScreenshot>> {
+        self.lock()
+            .as_ref()
+            .filter(|h| h.id == id)
+            .map(Arc::clone)
+    }
+
+    pub fn clear(&self) {
+        *self.lock() = None;
+    }
+
+    /// Clear the held screenshot if it has been around longer than [`TTL`].
+    /// `now` is taken as a parameter so tests can drive the clock without
+    /// sleeping.
+    pub fn clear_if_expired(&self, now: Instant) {
+        let mut guard = self.lock();
+        if let Some(h) = guard.as_ref() {
+            if now.saturating_duration_since(h.taken_at) > TTL {
+                *guard = None;
+            }
+        }
+    }
+
+    /// Lock helper that recovers from poison rather than panicking — a
+    /// poisoned `Option<Arc<HeldScreenshot>>` is safe to use as-is.
+    fn lock(&self) -> MutexGuard<'_, Option<Arc<HeldScreenshot>>> {
+        self.inner.lock().unwrap_or_else(|p| p.into_inner())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::RgbaImage;
+
+    fn held(id: &str, taken_at: Instant) -> HeldScreenshot {
+        HeldScreenshot {
+            id: id.to_string(),
+            monitors: vec![MonitorImage { index: 0, image: RgbaImage::new(1, 1) }],
+            taken_at,
+        }
+    }
+
+    #[test]
+    fn returns_held_when_id_matches() {
+        let store = ScreenshotStore::new();
+        store.put(held("scan-1", Instant::now()));
+        assert!(store.get_if_id("scan-1").is_some());
+    }
+
+    #[test]
+    fn returns_none_when_id_mismatch() {
+        let store = ScreenshotStore::new();
+        store.put(held("scan-1", Instant::now()));
+        assert!(store.get_if_id("scan-2").is_none());
+    }
+
+    #[test]
+    fn put_replaces_previous() {
+        let store = ScreenshotStore::new();
+        store.put(held("a", Instant::now()));
+        store.put(held("b", Instant::now()));
+        assert!(store.get_if_id("a").is_none());
+        assert!(store.get_if_id("b").is_some());
+    }
+
+    #[test]
+    fn clear_drops_held() {
+        let store = ScreenshotStore::new();
+        store.put(held("a", Instant::now()));
+        store.clear();
+        assert!(store.get_if_id("a").is_none());
+    }
+
+    #[test]
+    fn expired_screenshots_are_cleared() {
+        let store = ScreenshotStore::new();
+        let past = Instant::now() - (TTL + Duration::from_secs(1));
+        store.put(held("old", past));
+        store.clear_if_expired(Instant::now());
+        assert!(store.get_if_id("old").is_none());
+    }
+
+    #[test]
+    fn unexpired_screenshots_are_kept() {
+        let store = ScreenshotStore::new();
+        store.put(held("fresh", Instant::now()));
+        store.clear_if_expired(Instant::now());
+        assert!(store.get_if_id("fresh").is_some());
+    }
+}

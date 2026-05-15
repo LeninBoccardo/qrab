@@ -7,20 +7,22 @@
 
 use crate::capture::{Capturer, MonitorImage};
 use crate::decoder::{classify_kind, Decoder, QrKind};
+use crate::screenshot::{HeldScreenshot, ScreenshotStore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
 
-/// Tauri state container — one capturer and one decoder per app instance.
+/// Tauri state container.
 #[derive(Clone)]
 pub struct AppState {
     pub capturer: Arc<dyn Capturer>,
     pub decoder: Arc<dyn Decoder>,
+    pub screenshots: ScreenshotStore,
 }
 
 /// One decoded QR, shaped to match the SQLite schema (CLAUDE.md §7) so the
@@ -47,11 +49,13 @@ pub struct ScanResult {
     pub screenshot_id: String,
 }
 
-/// Capture every monitor, decode, and return the deduped rows.
+/// Capture every monitor, decode, persist the screenshot for region-select,
+/// and return the deduped rows.
 #[tauri::command]
 pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, String> {
     let capturer = state.capturer.clone();
     let decoder = state.decoder.clone();
+    let store = state.screenshots.clone();
 
     let monitors: Vec<MonitorImage> =
         tokio::task::spawn_blocking(move || capturer.capture_all())
@@ -60,19 +64,23 @@ pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, Strin
             .map_err(|e| e.to_string())?;
 
     let scanned_at = current_epoch_ms();
-    let batch_id = new_id("batch");
     let screenshot_id = new_id("scan");
-    let batch_id_for_decode = batch_id.clone();
+    let batch_id = new_id("batch");
 
-    let rows = tokio::task::spawn_blocking(move || {
-        decode_monitors(decoder.as_ref(), &monitors, &batch_id_for_decode, scanned_at)
+    // Decode in spawn_blocking; the closure returns (rows, monitors) so the
+    // images survive to be put in the screenshot store for region-select.
+    let (rows, monitors) = tokio::task::spawn_blocking(move || {
+        let rows = decode_monitors(decoder.as_ref(), &monitors, &batch_id, scanned_at);
+        (rows, monitors)
     })
     .await
     .map_err(|e| format!("decode task panicked: {e}"))?;
 
-    // Silence "batch_id only needed inside the closure" — keep it bound so
-    // logging hooks added later can reference the value without a re-grep.
-    let _ = batch_id;
+    store.put(HeldScreenshot {
+        id: screenshot_id.clone(),
+        monitors,
+        taken_at: Instant::now(),
+    });
 
     Ok(ScanResult { rows, screenshot_id })
 }

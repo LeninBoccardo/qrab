@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tauri::{Manager, WindowEvent};
 
 pub mod capture;
@@ -6,6 +7,7 @@ pub mod commands;
 pub mod decoder;
 pub mod error;
 pub mod hotkey;
+pub mod screenshot;
 pub mod tray;
 pub mod windows;
 
@@ -14,12 +16,18 @@ use commands::{
     copy_to_clipboard, hide_results_window, open_url, scan_screen, AppState,
 };
 use decoder::RqrrDecoder;
+use screenshot::ScreenshotStore;
+
+/// How often the TTL watcher wakes to check the held screenshot.
+const SCREENSHOT_GC_INTERVAL: Duration = Duration::from_secs(10);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let screenshots = ScreenshotStore::new();
     let state = AppState {
         capturer: Arc::new(XcapCapturer::new()),
         decoder: Arc::new(RqrrDecoder::new()),
+        screenshots: screenshots.clone(),
     };
 
     tauri::Builder::default()
@@ -33,17 +41,13 @@ pub fn run() {
             open_url,
             hide_results_window
         ])
-        .setup(|app| {
-            // macOS: no dock icon — the tray is the only persistent surface.
+        .setup(move |app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             hotkey::install_default(app.handle());
             tray::install(app.handle())?;
 
-            // The X button on the results window should hide, not close.
-            // Closing would terminate the only webview and (effectively)
-            // the app; we want the tray to keep it running.
             if let Some(window) = app.get_webview_window(windows::RESULTS_WINDOW) {
                 let to_hide = window.clone();
                 window.on_window_event(move |event| {
@@ -53,6 +57,17 @@ pub fn run() {
                     }
                 });
             }
+
+            // TTL watcher: periodically drop the held screenshot if it has
+            // aged past `screenshot::TTL`. Sleeping in a background task is
+            // cheap and avoids piling timers on every scan.
+            let gc_store = screenshots.clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::time::sleep(SCREENSHOT_GC_INTERVAL).await;
+                    gc_store.clear_if_expired(Instant::now());
+                }
+            });
 
             Ok(())
         })
