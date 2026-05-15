@@ -31,7 +31,9 @@ export function Content(props: ComponentProps<typeof KDialog.Content>) {
     <KDialog.Content
       {...rest}
       class={clsx(
-        "fixed left-1/2 top-1/2 z-50 w-[400px] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-neutral-200 bg-white p-5 shadow-xl dark:border-neutral-800 dark:bg-neutral-900",
+        // Consumers pass a width via `class` (e.g. "w-[400px]"); max-w
+        // keeps a sane cap on narrow windows.
+        "fixed left-1/2 top-1/2 z-50 max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-neutral-200 bg-white p-5 shadow-xl dark:border-neutral-800 dark:bg-neutral-900",
         local.class,
       )}
     />

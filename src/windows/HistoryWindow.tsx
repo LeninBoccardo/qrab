@@ -207,7 +207,7 @@ export const HistoryWindow: Component = () => {
       >
         <Dialog.Portal>
           <Dialog.Overlay />
-          <Dialog.Content>
+          <Dialog.Content class="w-[420px]">
             <Dialog.Title>Clear all history?</Dialog.Title>
             <Dialog.Description>
               This permanently deletes every row from the database. There's
