@@ -8,7 +8,7 @@ import {
   Show,
 } from "solid-js";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { ScanLine } from "lucide-solid";
+import { Crop, ScanLine } from "lucide-solid";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { ResultCard } from "../components/ResultCard";
 import { EmptyState } from "../components/EmptyState";
@@ -54,6 +54,13 @@ export const ResultsWindow: Component = () => {
     } finally {
       setLoading(false);
     }
+  }
+
+  function selectRegion(): void {
+    const r = scanResult();
+    if (!r) return;
+    setActiveScreenshotId(r.screenshotId);
+    window.location.hash = "region";
   }
 
   async function copyRow(row: ScanRow): Promise<void> {
@@ -118,7 +125,16 @@ export const ResultsWindow: Component = () => {
     <main class="flex h-full flex-col">
       <Titlebar onClose={() => void hideResultsWindow()} />
 
-      <div class="flex shrink-0 items-center justify-end border-b border-neutral-200/60 px-3 py-1.5 dark:border-neutral-800/60">
+      <div class="flex shrink-0 items-center justify-end gap-2 border-b border-neutral-200/60 px-3 py-1.5 dark:border-neutral-800/60">
+        <Button
+          variant="secondary"
+          onClick={selectRegion}
+          disabled={!scanResult()}
+          title="Refine by selecting a region of the screenshot"
+        >
+          <Crop size={16} />
+          Select region
+        </Button>
         <Button variant="primary" onClick={scan} disabled={loading()}>
           <ScanLine size={16} />
           {loading() ? "Scanning…" : "Scan now"}
