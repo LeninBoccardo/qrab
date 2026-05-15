@@ -9,6 +9,7 @@ pub mod decoder;
 pub mod error;
 pub mod hotkey;
 pub mod screenshot;
+pub mod storage;
 pub mod tray;
 pub mod windows;
 

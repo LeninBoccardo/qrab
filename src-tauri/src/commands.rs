@@ -6,8 +6,9 @@
 //! stays responsive.
 
 use crate::capture::{Capturer, MonitorImage};
-use crate::decoder::{classify_kind, Decoder, QrKind};
+use crate::decoder::{classify_kind, Decoder};
 use crate::screenshot::{HeldScreenshot, ScreenshotStore};
+use crate::storage::queries::ScanRow;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::io::Cursor;
@@ -29,22 +30,6 @@ pub struct AppState {
     /// frontend on mount so a hotkey that fires *before* the JS listener
     /// is attached (cold WebView2 on first open) still triggers a scan.
     pub pending_scan: Arc<AtomicBool>,
-}
-
-/// One decoded QR, shaped to match the SQLite schema (CLAUDE.md §7) so the
-/// IPC type doesn't change when persistence lands in C12. Pre-DB, `id` is
-/// `-1` and `opened`/`opened_at` are inert.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ScanRow {
-    pub id: i64,
-    pub batch_id: String,
-    pub content: String,
-    pub kind: QrKind,
-    pub monitor_index: i64,
-    pub scanned_at: i64,
-    pub opened: bool,
-    pub opened_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -342,6 +327,7 @@ fn new_id(prefix: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::decoder::QrKind;
     use image::RgbaImage;
     use std::sync::atomic::AtomicUsize;
 
