@@ -21,18 +21,20 @@ pub fn install_default<R: Runtime>(app: &AppHandle<R>) {
         app.global_shortcut()
             .on_shortcut(DEFAULT_HOTKEY, |app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
-                    handle_press(app);
+                    trigger_scan(app);
                 }
             });
     if let Err(e) = registered {
         eprintln!(
             "[qrab] could not register global shortcut '{DEFAULT_HOTKEY}': {e}. \
-             Window UI still works; tray click fallback arrives in C5."
+             Window UI and tray-click fallback still work."
         );
     }
 }
 
-fn handle_press<R: Runtime>(app: &AppHandle<R>) {
+/// Show the results window and emit the scan event the frontend listens
+/// for. Shared by the hotkey handler and the tray "Scan now" entry.
+pub fn trigger_scan<R: Runtime>(app: &AppHandle<R>) {
     crate::windows::show_results_window(app);
     if let Err(e) = app.emit(SCAN_EVENT, ()) {
         eprintln!("[qrab] failed to emit '{SCAN_EVENT}': {e}");

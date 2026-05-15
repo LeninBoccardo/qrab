@@ -1,10 +1,12 @@
 use std::sync::Arc;
+use tauri::{Manager, WindowEvent};
 
 pub mod capture;
 pub mod commands;
 pub mod decoder;
 pub mod error;
 pub mod hotkey;
+pub mod tray;
 pub mod windows;
 
 use capture::XcapCapturer;
@@ -32,7 +34,26 @@ pub fn run() {
             hide_results_window
         ])
         .setup(|app| {
+            // macOS: no dock icon — the tray is the only persistent surface.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             hotkey::install_default(app.handle());
+            tray::install(app.handle())?;
+
+            // The X button on the results window should hide, not close.
+            // Closing would terminate the only webview and (effectively)
+            // the app; we want the tray to keep it running.
+            if let Some(window) = app.get_webview_window(windows::RESULTS_WINDOW) {
+                let to_hide = window.clone();
+                window.on_window_event(move |event| {
+                    if let WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = to_hide.hide();
+                    }
+                });
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())
