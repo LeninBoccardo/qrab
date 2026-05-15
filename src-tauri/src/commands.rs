@@ -384,14 +384,32 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String
     Ok(state.settings.get())
 }
 
-/// Replace the user settings. C19 only stores them in memory; C20 will
-/// persist to disk and re-register the global hotkey when it changes.
+/// Replace the user settings. Persists to disk and applies side effects:
+/// re-registers the global hotkey if it changed, and enables/disables the
+/// OS autostart entry if that toggle changed.
 #[tauri::command]
 pub async fn set_settings(
+    app: AppHandle,
     state: State<'_, AppState>,
     settings: Settings,
 ) -> Result<(), String> {
-    state.settings.set(settings);
+    let prev = state.settings.get();
+    state.settings.set(settings.clone());
+
+    crate::settings::save_to_store(&app, &settings)
+        .map_err(|e| format!("persist settings: {e}"))?;
+
+    if prev.hotkey != settings.hotkey {
+        // Failure here is non-fatal — settings still saved, user sees the
+        // warning in logs and can rebind to a working combo.
+        crate::hotkey::register(&app, &settings.hotkey);
+    }
+
+    if prev.autostart != settings.autostart {
+        crate::settings::sync_autostart(&app, settings.autostart)
+            .map_err(|e| format!("autostart sync: {e}"))?;
+    }
+
     Ok(())
 }
 

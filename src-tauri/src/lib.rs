@@ -24,7 +24,7 @@ use commands::{
 };
 use decoder::RqrrDecoder;
 use screenshot::ScreenshotStore;
-use settings::{Settings, SettingsStore};
+use settings::SettingsStore;
 use storage::Storage;
 
 /// How often the TTL watcher wakes to check the held screenshot.
@@ -37,6 +37,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![
             scan_screen,
             scan_region,
@@ -72,6 +77,8 @@ pub fn run() {
             let storage = Storage::open(app_data_dir.join("qrab.db"))
                 .map_err(|e| format!("opening qrab.db: {e}"))?;
 
+            let loaded_settings = settings::load_from_store(app.handle());
+
             let screenshots = ScreenshotStore::new();
             let state = AppState {
                 capturer: Arc::new(XcapCapturer::new()),
@@ -79,11 +86,11 @@ pub fn run() {
                 screenshots: screenshots.clone(),
                 storage,
                 pending_scan: Arc::new(AtomicBool::new(false)),
-                settings: SettingsStore::new(Settings::default()),
+                settings: SettingsStore::new(loaded_settings.clone()),
             };
             app.manage(state);
 
-            hotkey::install_default(app.handle());
+            hotkey::register(app.handle(), &loaded_settings.hotkey);
             tray::install(app.handle())?;
 
             if let Some(window) = app.get_webview_window(windows::RESULTS_WINDOW) {

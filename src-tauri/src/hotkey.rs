@@ -6,8 +6,8 @@
 //!
 //! Registration is best-effort: on Wayland (and some restricted Linux
 //! sessions) global shortcuts may fail to register. We log and continue
-//! so the rest of the app still works — a tray-click fallback lands in
-//! C5 to keep the app usable without the hotkey.
+//! so the rest of the app still works — the tray-click fallback still
+//! triggers the same scan flow.
 
 use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
@@ -16,20 +16,31 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 pub const DEFAULT_HOTKEY: &str = "CmdOrCtrl+Shift+Q";
 pub const SCAN_EVENT: &str = "qrab:scan";
 
-/// Register the default hotkey. Failures are logged, not panicked on.
-pub fn install_default<R: Runtime>(app: &AppHandle<R>) {
-    let registered =
-        app.global_shortcut()
-            .on_shortcut(DEFAULT_HOTKEY, |app, _shortcut, event| {
-                if event.state == ShortcutState::Pressed {
-                    trigger_scan(app);
-                }
-            });
-    if let Err(e) = registered {
-        eprintln!(
-            "[qrab] could not register global shortcut '{DEFAULT_HOTKEY}': {e}. \
-             Window UI and tray-click fallback still work."
-        );
+/// Register `hotkey` as the global scan shortcut. Any previously-registered
+/// shortcut is removed first, so this also serves as the re-register entry
+/// point when the user rebinds in settings.
+///
+/// Returns `true` on success. Failures are logged and the function returns
+/// `false` — callers should not treat a failed registration as fatal.
+pub fn register<R: Runtime>(app: &AppHandle<R>, hotkey: &str) -> bool {
+    let shortcut = app.global_shortcut();
+    let _ = shortcut.unregister_all();
+    match shortcut.on_shortcut(hotkey, |app, _shortcut, event| {
+        if event.state == ShortcutState::Pressed {
+            trigger_scan(app);
+        }
+    }) {
+        Ok(()) => {
+            log::info!("registered global shortcut '{hotkey}'");
+            true
+        }
+        Err(e) => {
+            log::warn!(
+                "could not register global shortcut '{hotkey}': {e}. \
+                 Window UI and tray-click fallback still work."
+            );
+            false
+        }
     }
 }
 
@@ -50,6 +61,6 @@ pub fn trigger_scan<R: Runtime>(app: &AppHandle<R>) {
     state.pending_scan.store(true, Ordering::SeqCst);
 
     if let Err(e) = app.emit(SCAN_EVENT, ()) {
-        eprintln!("[qrab] failed to emit '{SCAN_EVENT}': {e}");
+        log::warn!("failed to emit '{SCAN_EVENT}': {e}");
     }
 }
