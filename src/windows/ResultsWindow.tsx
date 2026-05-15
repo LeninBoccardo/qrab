@@ -14,6 +14,7 @@ import { ResultCard } from "../components/ResultCard";
 import { EmptyState } from "../components/EmptyState";
 import { Button } from "../components/ui/Button";
 import {
+  consumePendingScan,
   copyToClipboard,
   hideResultsWindow,
   openUrl,
@@ -88,6 +89,12 @@ export const ResultsWindow: Component = () => {
       void scan();
     }).then((fn) => {
       unlisten = fn;
+    });
+
+    // Pick up a hotkey/tray scan that fired before this listener attached
+    // (cold WebView2 path). The event path above handles the warm case.
+    void consumePendingScan().then((pending) => {
+      if (pending) void scan();
     });
 
     onCleanup(() => {

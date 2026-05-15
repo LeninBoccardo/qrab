@@ -9,7 +9,8 @@
 //! so the rest of the app still works — a tray-click fallback lands in
 //! C5 to keep the app usable without the hotkey.
 
-use tauri::{AppHandle, Emitter, Runtime};
+use std::sync::atomic::Ordering;
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 pub const DEFAULT_HOTKEY: &str = "CmdOrCtrl+Shift+Q";
@@ -32,10 +33,22 @@ pub fn install_default<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-/// Show the results window and emit the scan event the frontend listens
-/// for. Shared by the hotkey handler and the tray "Scan now" entry.
+/// Show the results window and ask the frontend to start a scan. Used by
+/// both the hotkey handler and the tray "Scan now" entry.
+///
+/// Two paths reach the frontend so neither cold-start nor steady-state
+/// drops the request:
+///   1. A `pending_scan` flag in Tauri state, consumed by the frontend on
+///      mount. Catches the cold case where the JS listener isn't attached
+///      yet (first hotkey press after launch, WebView2 still warming up).
+///   2. A `qrab:scan` event emit. Catches the warm case where the listener
+///      is alive and we want an immediate trigger without polling.
 pub fn trigger_scan<R: Runtime>(app: &AppHandle<R>) {
     crate::windows::show_results_window(app);
+
+    let state = app.state::<crate::commands::AppState>();
+    state.pending_scan.store(true, Ordering::SeqCst);
+
     if let Err(e) = app.emit(SCAN_EVENT, ()) {
         eprintln!("[qrab] failed to emit '{SCAN_EVENT}': {e}");
     }

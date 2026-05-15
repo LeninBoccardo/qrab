@@ -10,7 +10,7 @@ use crate::decoder::{classify_kind, Decoder, QrKind};
 use crate::screenshot::{HeldScreenshot, ScreenshotStore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, State};
@@ -23,6 +23,10 @@ pub struct AppState {
     pub capturer: Arc<dyn Capturer>,
     pub decoder: Arc<dyn Decoder>,
     pub screenshots: ScreenshotStore,
+    /// Set by the hotkey/tray when they want a scan; consumed by the
+    /// frontend on mount so a hotkey that fires *before* the JS listener
+    /// is attached (cold WebView2 on first open) still triggers a scan.
+    pub pending_scan: Arc<AtomicBool>,
 }
 
 /// One decoded QR, shaped to match the SQLite schema (CLAUDE.md §7) so the
@@ -100,11 +104,19 @@ pub async fn open_url(app: AppHandle, url: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// Hide the results window. Bound to Esc in the frontend.
+/// Hide the results window. Bound to Esc and the titlebar Close button.
 #[tauri::command]
 pub async fn hide_results_window(app: AppHandle) -> Result<(), String> {
     crate::windows::hide_results_window(&app);
     Ok(())
+}
+
+/// Atomically clear and return the pending-scan flag. The frontend calls
+/// this on mount so a hotkey that fired before the listener attached
+/// still produces a scan.
+#[tauri::command]
+pub async fn consume_pending_scan(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(state.pending_scan.swap(false, Ordering::SeqCst))
 }
 
 /// Decode every monitor image and build `ScanRow`s, deduping identical

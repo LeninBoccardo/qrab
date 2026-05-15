@@ -16,5 +16,9 @@ export const openUrl = (url: string): Promise<void> =>
 export const hideResultsWindow = (): Promise<void> =>
   invoke<void>("hide_results_window");
 
+/** Atomically clears and returns the pending-scan flag. */
+export const consumePendingScan = (): Promise<boolean> =>
+  invoke<boolean>("consume_pending_scan");
+
 /** Event name the Rust hotkey handler emits on press. */
 export const SCAN_EVENT = "qrab:scan";

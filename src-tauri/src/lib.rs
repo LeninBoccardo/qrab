@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{Manager, WindowEvent};
@@ -13,7 +14,8 @@ pub mod windows;
 
 use capture::XcapCapturer;
 use commands::{
-    copy_to_clipboard, hide_results_window, open_url, scan_screen, AppState,
+    consume_pending_scan, copy_to_clipboard, hide_results_window, open_url,
+    scan_screen, AppState,
 };
 use decoder::RqrrDecoder;
 use screenshot::ScreenshotStore;
@@ -28,6 +30,7 @@ pub fn run() {
         capturer: Arc::new(XcapCapturer::new()),
         decoder: Arc::new(RqrrDecoder::new()),
         screenshots: screenshots.clone(),
+        pending_scan: Arc::new(AtomicBool::new(false)),
     };
 
     tauri::Builder::default()
@@ -39,7 +42,8 @@ pub fn run() {
             scan_screen,
             copy_to_clipboard,
             open_url,
-            hide_results_window
+            hide_results_window,
+            consume_pending_scan
         ])
         .setup(move |app| {
             #[cfg(target_os = "macos")]
