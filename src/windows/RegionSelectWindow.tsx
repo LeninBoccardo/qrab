@@ -18,6 +18,7 @@ import {
   hideResultsWindow,
   scanRegion,
 } from "../lib/ipc";
+import { formatError } from "../lib/format";
 import { activeScreenshotId, setScanResult } from "../lib/state";
 
 export const RegionSelectWindow: Component = () => {
@@ -156,9 +157,3 @@ export const RegionSelectWindow: Component = () => {
     </main>
   );
 };
-
-function formatError(err: unknown): string {
-  if (typeof err === "string") return err;
-  if (err instanceof Error) return err.message;
-  return String(err);
-}

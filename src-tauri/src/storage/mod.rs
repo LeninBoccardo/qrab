@@ -32,8 +32,10 @@ impl Storage {
         Ok(Self { inner: Arc::new(Mutex::new(conn)) })
     }
 
-    /// In-memory database — used by tests.
-    pub fn in_memory() -> rusqlite::Result<Self> {
+    /// In-memory database — used by tests. Gated on `cfg(test)` so it
+    /// doesn't sit in release builds as dead code.
+    #[cfg(test)]
+    pub(crate) fn in_memory() -> rusqlite::Result<Self> {
         let mut conn = Connection::open_in_memory()?;
         schema::run_migrations(&mut conn)?;
         Ok(Self { inner: Arc::new(Mutex::new(conn)) })
@@ -41,7 +43,9 @@ impl Storage {
 
     /// Lock the underlying connection. Recovers from poisoning since the
     /// data inside SQLite isn't corrupted by a panic on the Rust side.
-    pub fn lock(&self) -> MutexGuard<'_, Connection> {
+    /// Submodule-private — callers outside `storage::` should use the
+    /// query helpers in `storage::queries`.
+    pub(super) fn lock(&self) -> MutexGuard<'_, Connection> {
         self.inner.lock().unwrap_or_else(|p| p.into_inner())
     }
 }

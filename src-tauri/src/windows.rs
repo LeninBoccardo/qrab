@@ -1,8 +1,9 @@
 //! Helpers for showing/hiding the app's Tauri windows by label.
 //!
-//! The results window is currently the only one defined in
-//! `tauri.conf.json`; region/history/settings join in later phases and
-//! gain their own constants and helpers here as they do.
+//! qrab is a single-Tauri-window app: results / region select / history /
+//! settings are all the same OS window served by different hash routes
+//! in the SolidJS app. Only OS-window-level helpers belong here; route
+//! changes happen in the webview (see `tray.rs::navigate`).
 
 use tauri::{AppHandle, Manager, Runtime};
 

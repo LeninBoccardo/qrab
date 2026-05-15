@@ -25,6 +25,7 @@ import {
   SCAN_EVENT,
 } from "../lib/ipc";
 import { planOpenAll } from "../lib/bulkOpen";
+import { formatError } from "../lib/format";
 import {
   scanResult,
   setActiveScreenshotId,
@@ -277,9 +278,3 @@ export const ResultsWindow: Component = () => {
     </main>
   );
 };
-
-function formatError(err: unknown): string {
-  if (typeof err === "string") return err;
-  if (err instanceof Error) return err.message;
-  return String(err);
-}

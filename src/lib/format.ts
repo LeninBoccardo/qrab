@@ -14,3 +14,11 @@ export function relativeTime(ms: number): string {
 export function absoluteTime(ms: number): string {
   return new Date(ms).toLocaleString();
 }
+
+/** Convert an unknown thrown value (string, Error, anything else) into a
+ *  display-ready message. Used for IPC error toasts across windows. */
+export function formatError(err: unknown): string {
+  if (typeof err === "string") return err;
+  if (err instanceof Error) return err.message;
+  return String(err);
+}

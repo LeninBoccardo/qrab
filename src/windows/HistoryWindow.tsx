@@ -17,6 +17,7 @@ import {
   openUrlsBulk,
 } from "../lib/ipc";
 import { planOpenAll } from "../lib/bulkOpen";
+import { formatError } from "../lib/format";
 import type { HistoryFilter, ScanRow } from "../lib/types";
 
 const PAGE_SIZE = 50;
@@ -303,9 +304,3 @@ export const HistoryWindow: Component = () => {
     </main>
   );
 };
-
-function formatError(err: unknown): string {
-  if (typeof err === "string") return err;
-  if (err instanceof Error) return err.message;
-  return String(err);
-}

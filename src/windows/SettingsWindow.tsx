@@ -3,6 +3,7 @@ import { Titlebar } from "../components/Titlebar";
 import { HotkeyInput } from "../components/HotkeyInput";
 import * as Switch from "../components/ui/Switch";
 import { Toaster, showToast } from "../components/ui/Toast";
+import { formatError } from "../lib/format";
 import { hideResultsWindow } from "../lib/ipc";
 import { loadSettings, saveSettings, settings } from "../lib/state";
 import type { Settings, Theme } from "../lib/types";
@@ -106,6 +107,8 @@ export const SettingsWindow: Component = () => {
   );
 };
 
+
+
 interface RowProps {
   label: string;
   hint?: string;
@@ -154,8 +157,3 @@ const ToggleRow: Component<ToggleRowProps> = (props) => (
   </Switch.Root>
 );
 
-function formatError(err: unknown): string {
-  if (typeof err === "string") return err;
-  if (err instanceof Error) return err.message;
-  return String(err);
-}

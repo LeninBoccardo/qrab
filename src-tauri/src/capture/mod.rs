@@ -5,7 +5,7 @@
 
 use image::RgbaImage;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MonitorImage {
     pub index: usize,
     pub image: RgbaImage,

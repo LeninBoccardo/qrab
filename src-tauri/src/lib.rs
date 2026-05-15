@@ -6,7 +6,6 @@ use tauri::{Manager, WindowEvent};
 pub mod capture;
 pub mod commands;
 pub mod decoder;
-pub mod error;
 pub mod hotkey;
 pub mod logging;
 pub mod screenshot;

@@ -55,25 +55,6 @@ pub struct NewScanRow<'a> {
     pub scanned_at: i64,
 }
 
-pub fn insert_scan(
-    storage: &Storage,
-    row: &NewScanRow<'_>,
-) -> rusqlite::Result<i64> {
-    let conn = storage.lock();
-    conn.execute(
-        "INSERT INTO scans (batch_id, content, kind, monitor_index, scanned_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![
-            row.batch_id,
-            row.content,
-            qrkind_to_str(row.kind),
-            row.monitor_index,
-            row.scanned_at,
-        ],
-    )?;
-    Ok(conn.last_insert_rowid())
-}
-
 /// Insert multiple rows in a single transaction. Returns the row IDs in
 /// the same order as the input slice.
 pub fn insert_batch(
@@ -242,17 +223,18 @@ mod tests {
     #[test]
     fn insert_then_get_by_id_roundtrip() {
         let storage = fresh();
-        let id = insert_scan(
+        let ids = insert_batch(
             &storage,
-            &NewScanRow {
+            &[NewScanRow {
                 batch_id: "B-1",
                 content: "https://example.com",
                 kind: QrKind::Url,
                 monitor_index: 0,
                 scanned_at: 1_234_567_890_000,
-            },
+            }],
         )
         .expect("insert");
+        let id = ids[0];
 
         let row = get_by_id(&storage, id).expect("get").expect("some");
         assert_eq!(row.id, id);
@@ -322,18 +304,18 @@ mod tests {
             QrKind::Other,
         ];
         for (i, k) in kinds.iter().enumerate() {
-            let id = insert_scan(
+            let ids = insert_batch(
                 &storage,
-                &NewScanRow {
+                &[NewScanRow {
                     batch_id: "B-kind",
                     content: "x",
                     kind: *k,
                     monitor_index: 0,
                     scanned_at: i as i64,
-                },
+                }],
             )
             .expect("insert");
-            let row = get_by_id(&storage, id).expect("get").expect("some");
+            let row = get_by_id(&storage, ids[0]).expect("get").expect("some");
             assert_eq!(row.kind, *k, "kind round-trip failed for {:?}", k);
         }
     }

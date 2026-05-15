@@ -1,9 +1,10 @@
 //! `#[tauri::command]` functions — the IPC surface.
 //!
 //! Commands return `Result<T, String>` to keep the boundary stable; the
-//! underlying typed errors live in [`crate::error`]. Heavy work (capture,
-//! decode) runs inside `tokio::task::spawn_blocking` so the async runtime
-//! stays responsive.
+//! underlying typed errors live in each module (`CaptureError`,
+//! `DecodeError`, `rusqlite::Error`). Heavy work (capture, decode, every
+//! SQLite touch) runs inside `tokio::task::spawn_blocking` so the async
+//! runtime stays responsive.
 
 use crate::capture::{Capturer, MonitorImage};
 use crate::decoder::{classify_kind, Decoder, QrKind};
@@ -37,8 +38,9 @@ pub struct AppState {
     /// frontend on mount so a hotkey that fires *before* the JS listener
     /// is attached (cold WebView2 on first open) still triggers a scan.
     pub pending_scan: Arc<AtomicBool>,
-    /// User-facing settings (CLAUDE.md §9). C19 holds in memory; C20 will
-    /// persist via tauri-plugin-store and re-register the hotkey on change.
+    /// User-facing settings (CLAUDE.md §9). Persisted via
+    /// `tauri-plugin-store`; hotkey + autostart side effects applied on
+    /// `set_settings`.
     pub settings: SettingsStore,
 }
 
