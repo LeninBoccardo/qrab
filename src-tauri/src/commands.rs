@@ -8,17 +8,19 @@
 use crate::capture::{Capturer, MonitorImage};
 use crate::decoder::{classify_kind, Decoder};
 use crate::screenshot::{HeldScreenshot, ScreenshotStore};
-use crate::storage::queries::ScanRow;
+use crate::storage::queries::{insert_batch, NewScanRow, ScanRow};
+use crate::storage::Storage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::io::Cursor;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tauri::ipc::Response;
 use tauri::{AppHandle, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
+use ulid::Ulid;
 
 /// Tauri state container.
 #[derive(Clone)]
@@ -26,6 +28,7 @@ pub struct AppState {
     pub capturer: Arc<dyn Capturer>,
     pub decoder: Arc<dyn Decoder>,
     pub screenshots: ScreenshotStore,
+    pub storage: Storage,
     /// Set by the hotkey/tray when they want a scan; consumed by the
     /// frontend on mount so a hotkey that fires *before* the JS listener
     /// is attached (cold WebView2 on first open) still triggers a scan.
@@ -50,8 +53,8 @@ pub struct RegionBounds {
     pub monitor_index: usize,
 }
 
-/// Capture every monitor, decode, persist the screenshot for region-select,
-/// and return the deduped rows.
+/// Capture every monitor, decode, persist matches to the database, hold
+/// the screenshot for region-select, and return the rows with real IDs.
 #[tauri::command]
 pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, String> {
     let capturer = state.capturer.clone();
@@ -65,17 +68,20 @@ pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, Strin
             .map_err(|e| e.to_string())?;
 
     let scanned_at = current_epoch_ms();
-    let screenshot_id = new_id("scan");
-    let batch_id = new_id("batch");
+    let screenshot_id = Ulid::new().to_string();
+    let batch_id = Ulid::new().to_string();
 
     // Decode in spawn_blocking; the closure returns (rows, monitors) so the
     // images survive to be put in the screenshot store for region-select.
-    let (rows, monitors) = tokio::task::spawn_blocking(move || {
+    let (mut rows, monitors) = tokio::task::spawn_blocking(move || {
         let rows = decode_monitors(decoder.as_ref(), &monitors, &batch_id, scanned_at);
         (rows, monitors)
     })
     .await
     .map_err(|e| format!("decode task panicked: {e}"))?;
+
+    // Persist matches and fill in the real DB IDs.
+    persist_rows(&state.storage, &mut rows)?;
 
     store.put(HeldScreenshot {
         id: screenshot_id.clone(),
@@ -104,9 +110,9 @@ pub async fn scan_region(
         .ok_or_else(|| "screenshot not found or expired".to_string())?;
     let decoder = state.decoder.clone();
     let scanned_at = current_epoch_ms();
-    let batch_id = new_id("batch");
+    let batch_id = Ulid::new().to_string();
 
-    let rows: Vec<ScanRow> = tokio::task::spawn_blocking(
+    let mut rows: Vec<ScanRow> = tokio::task::spawn_blocking(
         move || -> Result<Vec<ScanRow>, String> {
             let monitor = held
                 .monitors
@@ -130,7 +136,33 @@ pub async fn scan_region(
     .await
     .map_err(|e| format!("region decode task panicked: {e}"))??;
 
+    persist_rows(&state.storage, &mut rows)?;
+
     Ok(ScanResult { rows, screenshot_id })
+}
+
+/// Insert any rows where `id == -1` (i.e. freshly decoded) and overwrite
+/// their `id` with the DB-assigned one. Empty input is a no-op.
+fn persist_rows(storage: &Storage, rows: &mut [ScanRow]) -> Result<(), String> {
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let new_rows: Vec<NewScanRow<'_>> = rows
+        .iter()
+        .map(|r| NewScanRow {
+            batch_id: &r.batch_id,
+            content: &r.content,
+            kind: r.kind,
+            monitor_index: r.monitor_index,
+            scanned_at: r.scanned_at,
+        })
+        .collect();
+    let ids =
+        insert_batch(storage, &new_rows).map_err(|e| format!("storage: {e}"))?;
+    for (row, id) in rows.iter_mut().zip(ids.iter()) {
+        row.id = *id;
+    }
+    Ok(())
 }
 
 /// Crop `image` to `bounds` and decode the crop. Validates bounds against
@@ -314,14 +346,6 @@ fn current_epoch_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
-}
-
-/// Build an id of the form `"{prefix}-{epoch_ms}-{seq}"`. Stable enough for
-/// scan/batch handles pre-DB; replaced by ULIDs in C11.
-fn new_id(prefix: &str) -> String {
-    static SEQ: AtomicU64 = AtomicU64::new(0);
-    let n = SEQ.fetch_add(1, Ordering::SeqCst);
-    format!("{prefix}-{}-{n}", current_epoch_ms())
 }
 
 #[cfg(test)]
