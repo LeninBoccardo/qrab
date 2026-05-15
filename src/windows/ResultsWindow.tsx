@@ -22,23 +22,33 @@ import {
   scanScreen,
   SCAN_EVENT,
 } from "../lib/ipc";
-import type { ScanResult, ScanRow } from "../lib/types";
+import {
+  scanResult,
+  setActiveScreenshotId,
+  setScanResult,
+} from "../lib/state";
+import type { ScanRow } from "../lib/types";
 
 export const ResultsWindow: Component = () => {
-  const [result, setResult] = createSignal<ScanResult | null>(null);
   const [focusIdx, setFocusIdx] = createSignal(0);
   const [loading, setLoading] = createSignal(false);
 
-  const rows = createMemo<ScanRow[]>(() => result()?.rows ?? []);
-  const hasScanned = createMemo(() => result() !== null);
+  const rows = createMemo<ScanRow[]>(() => scanResult()?.rows ?? []);
+  const hasScanned = createMemo(() => scanResult() !== null);
 
   async function scan(): Promise<void> {
     if (loading()) return;
     setLoading(true);
     try {
       const r = await scanScreen();
-      setResult(r);
+      setScanResult(r);
       setFocusIdx(0);
+      // Zero results → push the user straight into the region selector
+      // with the freshly held screenshot. Per CLAUDE.md §5 flow.
+      if (r.rows.length === 0) {
+        setActiveScreenshotId(r.screenshotId);
+        window.location.hash = "region";
+      }
     } catch (err) {
       showToast(`Scan failed: ${formatError(err)}`);
     } finally {

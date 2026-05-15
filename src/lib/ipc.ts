@@ -2,7 +2,11 @@
 // and there's one file to grep when the Rust side changes.
 
 import { invoke } from "@tauri-apps/api/core";
-import type { RegionBounds, ScanResult } from "./types";
+import type {
+  RegionBounds,
+  ScanResult,
+  ScreenshotMonitorMeta,
+} from "./types";
 
 export const scanScreen = (): Promise<ScanResult> =>
   invoke<ScanResult>("scan_screen");
@@ -25,6 +29,22 @@ export const hideResultsWindow = (): Promise<void> =>
 /** Atomically clears and returns the pending-scan flag. */
 export const consumePendingScan = (): Promise<boolean> =>
   invoke<boolean>("consume_pending_scan");
+
+export const getScreenshotMonitors = (
+  screenshotId: string,
+): Promise<ScreenshotMonitorMeta[]> =>
+  invoke<ScreenshotMonitorMeta[]>("get_screenshot_monitors", { screenshotId });
+
+/** Fetch a monitor's PNG bytes as a binary IPC response (Tauri returns
+ *  an ArrayBuffer when the Rust side uses tauri::ipc::Response). */
+export const getScreenshotMonitorPng = (
+  screenshotId: string,
+  monitorIndex: number,
+): Promise<ArrayBuffer> =>
+  invoke<ArrayBuffer>("get_screenshot_monitor_png", {
+    screenshotId,
+    monitorIndex,
+  });
 
 /** Event name the Rust hotkey handler emits on press. */
 export const SCAN_EVENT = "qrab:scan";

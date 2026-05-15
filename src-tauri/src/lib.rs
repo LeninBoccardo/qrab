@@ -14,8 +14,9 @@ pub mod windows;
 
 use capture::XcapCapturer;
 use commands::{
-    consume_pending_scan, copy_to_clipboard, hide_results_window, open_url,
-    scan_region, scan_screen, AppState,
+    consume_pending_scan, copy_to_clipboard, get_screenshot_monitor_png,
+    get_screenshot_monitors, hide_results_window, open_url, scan_region,
+    scan_screen, AppState,
 };
 use decoder::RqrrDecoder;
 use screenshot::ScreenshotStore;
@@ -44,7 +45,9 @@ pub fn run() {
             copy_to_clipboard,
             open_url,
             hide_results_window,
-            consume_pending_scan
+            consume_pending_scan,
+            get_screenshot_monitors,
+            get_screenshot_monitor_png
         ])
         .setup(move |app| {
             #[cfg(target_os = "macos")]

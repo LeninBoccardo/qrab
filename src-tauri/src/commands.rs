@@ -10,9 +10,11 @@ use crate::decoder::{classify_kind, Decoder, QrKind};
 use crate::screenshot::{HeldScreenshot, ScreenshotStore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::io::Cursor;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use tauri::ipc::Response;
 use tauri::{AppHandle, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
@@ -222,6 +224,71 @@ pub async fn hide_results_window(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn consume_pending_scan(state: State<'_, AppState>) -> Result<bool, String> {
     Ok(state.pending_scan.swap(false, Ordering::SeqCst))
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScreenshotMonitorMeta {
+    pub index: usize,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// Return per-monitor metadata for a held screenshot. The region UI uses
+/// this to lay out a monitor picker and to know each image's native
+/// dimensions for coordinate math.
+#[tauri::command]
+pub async fn get_screenshot_monitors(
+    state: State<'_, AppState>,
+    screenshot_id: String,
+) -> Result<Vec<ScreenshotMonitorMeta>, String> {
+    let held = state
+        .screenshots
+        .get_if_id(&screenshot_id)
+        .ok_or_else(|| "screenshot not found or expired".to_string())?;
+    Ok(held
+        .monitors
+        .iter()
+        .map(|m| {
+            let (w, h) = m.image.dimensions();
+            ScreenshotMonitorMeta { index: m.index, width: w, height: h }
+        })
+        .collect())
+}
+
+/// Return one monitor's image as a PNG, served as a binary Tauri response
+/// (no base64 inflation). The frontend wraps the result in a Blob URL.
+#[tauri::command]
+pub async fn get_screenshot_monitor_png(
+    state: State<'_, AppState>,
+    screenshot_id: String,
+    monitor_index: usize,
+) -> Result<Response, String> {
+    let held = state
+        .screenshots
+        .get_if_id(&screenshot_id)
+        .ok_or_else(|| "screenshot not found or expired".to_string())?;
+    let bytes = tokio::task::spawn_blocking(
+        move || -> Result<Vec<u8>, String> {
+            let monitor = held
+                .monitors
+                .iter()
+                .find(|m| m.index == monitor_index)
+                .ok_or_else(|| {
+                    format!("monitor index {monitor_index} not in screenshot")
+                })?;
+            let dyn_img =
+                image::DynamicImage::ImageRgba8(monitor.image.clone());
+            let mut buf = Cursor::new(Vec::<u8>::new());
+            dyn_img
+                .write_to(&mut buf, image::ImageFormat::Png)
+                .map_err(|e| format!("png encode: {e}"))?;
+            Ok(buf.into_inner())
+        },
+    )
+    .await
+    .map_err(|e| format!("encode task panicked: {e}"))??;
+    Ok(Response::new(bytes))
 }
 
 /// Decode every monitor image and build `ScanRow`s, deduping identical

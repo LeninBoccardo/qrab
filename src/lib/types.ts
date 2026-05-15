@@ -38,3 +38,10 @@ export interface RegionBounds {
   h: number;
   monitorIndex: number;
 }
+
+/** Per-monitor metadata for a held screenshot. */
+export interface ScreenshotMonitorMeta {
+  index: number;
+  width: number;
+  height: number;
+}
