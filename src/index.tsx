@@ -2,23 +2,15 @@
 import { render } from "solid-js/web";
 import "./styles.css";
 import App from "./App";
-import { getSettings } from "./lib/ipc";
+import { loadSettings } from "./lib/state";
 import { info, installGlobalErrorLogging } from "./lib/log";
-import { applyTheme, watchSystemTheme } from "./lib/theme";
 
 installGlobalErrorLogging();
 void info(`webview loaded (route: ${window.location.hash || "#"})`);
 
-// Apply the theme as early as possible so any flash is short. We can't go
-// fully sync because settings live behind IPC; SettingsWindow's effect
-// reapplies on every change after this.
-void getSettings()
-  .then((s) => {
-    applyTheme(s.theme);
-    watchSystemTheme(s.theme);
-  })
-  .catch(() => {
-    /* swallow — fall back to default (no .dark class, system styling) */
-  });
+// Load settings (theme applied as a side effect). Fire-and-forget — every
+// consumer treats `settings()` being null as "not loaded yet" and falls
+// back gracefully.
+void loadSettings();
 
 render(() => <App />, document.getElementById("root") as HTMLElement);

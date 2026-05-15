@@ -1,34 +1,23 @@
-import {
-  Component,
-  createEffect,
-  createResource,
-  createSignal,
-  Show,
-} from "solid-js";
+import { Component, createSignal, onMount, Show } from "solid-js";
 import { Titlebar } from "../components/Titlebar";
 import { HotkeyInput } from "../components/HotkeyInput";
 import * as Switch from "../components/ui/Switch";
 import { Toaster, showToast } from "../components/ui/Toast";
-import { getSettings, hideResultsWindow, setSettings } from "../lib/ipc";
-import { applyTheme, watchSystemTheme } from "../lib/theme";
+import { hideResultsWindow } from "../lib/ipc";
+import { loadSettings, saveSettings, settings } from "../lib/state";
 import type { Settings, Theme } from "../lib/types";
 
 export const SettingsWindow: Component = () => {
-  const [resource, { mutate }] = createResource<Settings>(getSettings);
   const [saving, setSaving] = createSignal(false);
 
-  createEffect(() => {
-    const s = resource();
-    if (!s) return;
-    applyTheme(s.theme);
-    watchSystemTheme(s.theme);
+  onMount(() => {
+    if (!settings()) void loadSettings();
   });
 
   async function save(next: Settings): Promise<void> {
-    mutate(next);
     setSaving(true);
     try {
-      await setSettings(next);
+      await saveSettings(next);
     } catch (err) {
       showToast(`Save failed: ${formatError(err)}`);
     } finally {
@@ -37,7 +26,7 @@ export const SettingsWindow: Component = () => {
   }
 
   function update<K extends keyof Settings>(key: K, value: Settings[K]): void {
-    const current = resource();
+    const current = settings();
     if (!current) return;
     void save({ ...current, [key]: value });
   }
@@ -50,21 +39,18 @@ export const SettingsWindow: Component = () => {
       />
 
       <Show
-        when={resource()}
+        when={settings()}
         fallback={
           <div class="flex flex-1 items-center justify-center text-sm text-neutral-500">
             Loading…
           </div>
         }
       >
-        {(settings) => (
+        {(s) => (
           <div class="flex flex-1 flex-col gap-5 overflow-auto p-5">
-            <Row
-              label="Hotkey"
-              hint="Global shortcut to capture and decode."
-            >
+            <Row label="Hotkey" hint="Global shortcut to capture and decode.">
               <HotkeyInput
-                value={settings().hotkey}
+                value={s().hotkey}
                 onChange={(v) => update("hotkey", v)}
               />
             </Row>
@@ -72,7 +58,7 @@ export const SettingsWindow: Component = () => {
             <Row label="Theme">
               <select
                 class="rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-                value={settings().theme}
+                value={s().theme}
                 onChange={(e) =>
                   update("theme", e.currentTarget.value as Theme)
                 }
@@ -85,26 +71,26 @@ export const SettingsWindow: Component = () => {
 
             <ToggleRow
               label="Launch on login"
-              checked={settings().autostart}
+              checked={s().autostart}
               onChange={(v) => update("autostart", v)}
             />
 
             <ToggleRow
               label="Auto-copy when a scan finds one result"
               hint="Skip the click — drop the decoded text on the clipboard automatically."
-              checked={settings().autoCopyOnSingleResult}
+              checked={s().autoCopyOnSingleResult}
               onChange={(v) => update("autoCopyOnSingleResult", v)}
             />
 
             <ToggleRow
               label="Close after copy"
-              checked={settings().closeAfterCopy}
+              checked={s().closeAfterCopy}
               onChange={(v) => update("closeAfterCopy", v)}
             />
 
             <ToggleRow
               label="Close after open"
-              checked={settings().closeAfterOpen}
+              checked={s().closeAfterOpen}
               onChange={(v) => update("closeAfterOpen", v)}
             />
 

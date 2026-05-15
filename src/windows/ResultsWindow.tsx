@@ -29,6 +29,7 @@ import {
   scanResult,
   setActiveScreenshotId,
   setScanResult,
+  settings,
 } from "../lib/state";
 import type { ScanRow } from "../lib/types";
 
@@ -58,6 +59,14 @@ export const ResultsWindow: Component = () => {
       if (r.rows.length === 0) {
         setActiveScreenshotId(r.screenshotId);
         window.location.hash = "region";
+        return;
+      }
+      // Single result + auto-copy enabled → copy without the click
+      // (CLAUDE.md §9 autoCopyOnSingleResult). copyRow respects
+      // closeAfterCopy so the whole flow can be one-shot when the user
+      // wants it.
+      if (r.rows.length === 1 && settings()?.autoCopyOnSingleResult) {
+        await copyRow(r.rows[0]);
       }
     } catch (err) {
       showToast(`Scan failed: ${formatError(err)}`);
@@ -77,6 +86,9 @@ export const ResultsWindow: Component = () => {
     try {
       await copyToClipboard(row.content);
       showToast("Copied to clipboard");
+      if (settings()?.closeAfterCopy) {
+        await hideResultsWindow();
+      }
     } catch (err) {
       showToast(`Copy failed: ${formatError(err)}`);
     }
@@ -85,6 +97,9 @@ export const ResultsWindow: Component = () => {
   async function openRow(row: ScanRow): Promise<void> {
     try {
       await openUrl(row.id);
+      if (settings()?.closeAfterOpen) {
+        await hideResultsWindow();
+      }
     } catch (err) {
       showToast(`Open failed: ${formatError(err)}`);
     }
