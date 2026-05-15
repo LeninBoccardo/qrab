@@ -12,7 +12,9 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::State;
+use tauri::{AppHandle, State};
+use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_opener::OpenerExt;
 
 /// Tauri state container — one capturer and one decoder per app instance.
 #[derive(Clone)]
@@ -73,6 +75,21 @@ pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, Strin
     let _ = batch_id;
 
     Ok(ScanResult { rows, screenshot_id })
+}
+
+/// Write `text` to the system clipboard.
+#[tauri::command]
+pub async fn copy_to_clipboard(app: AppHandle, text: String) -> Result<(), String> {
+    app.clipboard().write_text(text).map_err(|e| e.to_string())
+}
+
+/// Open `url` in the user's default browser. Pre-DB this is fire-and-forget;
+/// C13 will additionally mark the row's `opened` flag in storage.
+#[tauri::command]
+pub async fn open_url(app: AppHandle, url: String) -> Result<(), String> {
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
 }
 
 /// Decode every monitor image and build `ScanRow`s, deduping identical

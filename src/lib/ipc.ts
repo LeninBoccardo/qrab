@@ -6,3 +6,9 @@ import type { ScanResult } from "./types";
 
 export const scanScreen = (): Promise<ScanResult> =>
   invoke<ScanResult>("scan_screen");
+
+export const copyToClipboard = (text: string): Promise<void> =>
+  invoke<void>("copy_to_clipboard", { text });
+
+export const openUrl = (url: string): Promise<void> =>
+  invoke<void>("open_url", { url });
