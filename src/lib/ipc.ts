@@ -12,3 +12,9 @@ export const copyToClipboard = (text: string): Promise<void> =>
 
 export const openUrl = (url: string): Promise<void> =>
   invoke<void>("open_url", { url });
+
+export const hideResultsWindow = (): Promise<void> =>
+  invoke<void>("hide_results_window");
+
+/** Event name the Rust hotkey handler emits on press. */
+export const SCAN_EVENT = "qrab:scan";

@@ -7,12 +7,19 @@ import {
   onMount,
   Show,
 } from "solid-js";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { ScanLine } from "lucide-solid";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { ResultCard } from "../components/ResultCard";
 import { EmptyState } from "../components/EmptyState";
 import { Button } from "../components/ui/Button";
-import { copyToClipboard, openUrl, scanScreen } from "../lib/ipc";
+import {
+  copyToClipboard,
+  hideResultsWindow,
+  openUrl,
+  scanScreen,
+  SCAN_EVENT,
+} from "../lib/ipc";
 import type { ScanResult, ScanRow } from "../lib/types";
 
 export const ResultsWindow: Component = () => {
@@ -24,6 +31,7 @@ export const ResultsWindow: Component = () => {
   const hasScanned = createMemo(() => result() !== null);
 
   async function scan(): Promise<void> {
+    if (loading()) return;
     setLoading(true);
     try {
       const r = await scanScreen();
@@ -67,12 +75,25 @@ export const ResultsWindow: Component = () => {
       if (!row) return;
       if (row.kind === "url") void openRow(row);
       else void copyRow(row);
+    } else if (e.key === "Escape") {
+      void hideResultsWindow();
     }
   }
 
   onMount(() => {
     window.addEventListener("keydown", onKeyDown);
-    onCleanup(() => window.removeEventListener("keydown", onKeyDown));
+
+    let unlisten: UnlistenFn | null = null;
+    void listen(SCAN_EVENT, () => {
+      void scan();
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    onCleanup(() => {
+      window.removeEventListener("keydown", onKeyDown);
+      unlisten?.();
+    });
   });
 
   return (

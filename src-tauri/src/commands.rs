@@ -92,6 +92,13 @@ pub async fn open_url(app: AppHandle, url: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Hide the results window. Bound to Esc in the frontend.
+#[tauri::command]
+pub async fn hide_results_window(app: AppHandle) -> Result<(), String> {
+    crate::windows::hide_results_window(&app);
+    Ok(())
+}
+
 /// Decode every monitor image and build `ScanRow`s, deduping identical
 /// content across monitors (first-monitor-wins per CLAUDE.md §9).
 ///
