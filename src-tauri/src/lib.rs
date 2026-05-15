@@ -17,8 +17,8 @@ use capture::XcapCapturer;
 use commands::{
     consume_pending_scan, copy_to_clipboard, get_screenshot_monitor_png,
     get_screenshot_monitors, hide_results_window, history_clear,
-    history_delete, history_query, mark_opened, open_url, scan_region,
-    scan_screen, AppState,
+    history_delete, history_query, mark_opened, open_url, open_urls_bulk,
+    scan_region, scan_screen, AppState,
 };
 use decoder::RqrrDecoder;
 use screenshot::ScreenshotStore;
@@ -38,6 +38,7 @@ pub fn run() {
             scan_region,
             copy_to_clipboard,
             open_url,
+            open_urls_bulk,
             mark_opened,
             history_query,
             history_delete,

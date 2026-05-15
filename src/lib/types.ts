@@ -59,3 +59,18 @@ export interface HistoryFilter {
   limit: number;
   offset: number;
 }
+
+export interface BulkOpenFailure {
+  id: number;
+  error: string;
+}
+
+export interface BulkOpenResult {
+  opened: number[];
+  failed: BulkOpenFailure[];
+  skippedNonUrl: number;
+}
+
+/** Mirror of BULK_OPEN_CONFIRM_THRESHOLD in commands.rs (CLAUDE.md §10).
+ *  Above this many URLs, ConfirmOpenAll must be shown first. */
+export const BULK_OPEN_CONFIRM_THRESHOLD = 3;

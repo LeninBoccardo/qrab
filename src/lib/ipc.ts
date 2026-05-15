@@ -3,6 +3,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  BulkOpenResult,
   HistoryFilter,
   RegionBounds,
   ScanResult,
@@ -25,6 +26,15 @@ export const copyToClipboard = (text: string): Promise<void> =>
 /** Open the row's URL in the user's browser and stamp `opened_at`. */
 export const openUrl = (id: number): Promise<void> =>
   invoke<void>("open_url", { id });
+
+/** Open every URL in `ids`. Non-URL rows are skipped. If the URL count
+ *  exceeds the threshold, pass `confirmed: true` (after surfacing
+ *  ConfirmOpenAll) or the Rust side refuses. */
+export const openUrlsBulk = (
+  ids: number[],
+  confirmed: boolean,
+): Promise<BulkOpenResult> =>
+  invoke<BulkOpenResult>("open_urls_bulk", { ids, confirmed });
 
 export const markOpened = (id: number): Promise<void> =>
   invoke<void>("mark_opened", { id });

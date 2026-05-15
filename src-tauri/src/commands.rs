@@ -286,6 +286,79 @@ pub async fn history_clear(state: State<'_, AppState>) -> Result<(), String> {
     Ok(())
 }
 
+/// Above this count the frontend must surface ConfirmOpenAll first
+/// (CLAUDE.md §10). The Rust side double-checks via `open_urls_bulk` so
+/// a buggy or compromised frontend can't tab-bomb the user.
+pub const BULK_OPEN_CONFIRM_THRESHOLD: usize = 3;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkOpenResult {
+    pub opened: Vec<i64>,
+    pub failed: Vec<BulkOpenFailure>,
+    pub skipped_non_url: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkOpenFailure {
+    pub id: i64,
+    pub error: String,
+}
+
+/// Open every URL row in `ids` and mark each opened. Non-URL rows are
+/// silently skipped (counted in `skipped_non_url`). If the URL count
+/// exceeds [`BULK_OPEN_CONFIRM_THRESHOLD`] and `confirmed` is false,
+/// returns an error — the frontend must show ConfirmOpenAll first.
+#[tauri::command]
+pub async fn open_urls_bulk(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+    confirmed: bool,
+) -> Result<BulkOpenResult, String> {
+    // Resolve rows up front so the count check uses URLs only — non-URL
+    // rows in the selection don't tab-bomb the threshold.
+    let mut url_rows: Vec<(i64, String)> = Vec::with_capacity(ids.len());
+    let mut skipped_non_url = 0usize;
+    for id in &ids {
+        let row = get_by_id(&state.storage, *id)
+            .map_err(|e| format!("storage: {e}"))?
+            .ok_or_else(|| format!("row {id} not found"))?;
+        if row.kind == QrKind::Url {
+            url_rows.push((*id, row.content));
+        } else {
+            skipped_non_url += 1;
+        }
+    }
+
+    if url_rows.len() > BULK_OPEN_CONFIRM_THRESHOLD && !confirmed {
+        return Err(format!(
+            "Confirmation required for opening more than {} URLs",
+            BULK_OPEN_CONFIRM_THRESHOLD
+        ));
+    }
+
+    let now_ms = current_epoch_ms();
+    let opener = app.opener();
+    let mut opened = Vec::new();
+    let mut failed = Vec::new();
+
+    for (id, url) in url_rows {
+        match opener.open_url(&url, None::<&str>) {
+            Ok(()) => {
+                if let Err(e) = mark_opened_db(&state.storage, id, now_ms) {
+                    eprintln!("[qrab] mark_opened failed for {id}: {e}");
+                }
+                opened.push(id);
+            }
+            Err(e) => failed.push(BulkOpenFailure { id, error: e.to_string() }),
+        }
+    }
+
+    Ok(BulkOpenResult { opened, failed, skipped_non_url })
+}
+
 /// Hide the results window. Bound to Esc and the titlebar Close button.
 #[tauri::command]
 pub async fn hide_results_window(app: AppHandle) -> Result<(), String> {
