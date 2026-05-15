@@ -10,6 +10,7 @@ pub mod error;
 pub mod hotkey;
 pub mod logging;
 pub mod screenshot;
+pub mod settings;
 pub mod storage;
 pub mod tray;
 pub mod windows;
@@ -17,12 +18,13 @@ pub mod windows;
 use capture::XcapCapturer;
 use commands::{
     consume_pending_scan, copy_to_clipboard, get_screenshot_monitor_png,
-    get_screenshot_monitors, hide_results_window, history_clear,
+    get_screenshot_monitors, get_settings, hide_results_window, history_clear,
     history_delete, history_query, mark_opened, open_url, open_urls_bulk,
-    scan_region, scan_screen, AppState,
+    scan_region, scan_screen, set_settings, AppState,
 };
 use decoder::RqrrDecoder;
 use screenshot::ScreenshotStore;
+use settings::{Settings, SettingsStore};
 use storage::Storage;
 
 /// How often the TTL watcher wakes to check the held screenshot.
@@ -48,7 +50,9 @@ pub fn run() {
             hide_results_window,
             consume_pending_scan,
             get_screenshot_monitors,
-            get_screenshot_monitor_png
+            get_screenshot_monitor_png,
+            get_settings,
+            set_settings
         ])
         .setup(|app| {
             log::info!("qrab starting (logs dir: {})", logging::logs_dir().display());
@@ -75,6 +79,7 @@ pub fn run() {
                 screenshots: screenshots.clone(),
                 storage,
                 pending_scan: Arc::new(AtomicBool::new(false)),
+                settings: SettingsStore::new(Settings::default()),
             };
             app.manage(state);
 

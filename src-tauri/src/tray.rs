@@ -22,10 +22,19 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
         true,
         None::<&str>,
     )?;
+    let settings = MenuItem::with_id(
+        app,
+        "settings",
+        "Settings…",
+        true,
+        None::<&str>,
+    )?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu =
-        Menu::with_items(app, &[&scan, &history, &separator, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[&scan, &history, &settings, &separator, &quit],
+    )?;
 
     let icon = app
         .default_window_icon()
@@ -40,6 +49,7 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
         .on_menu_event(|app, event| match event.id().as_ref() {
             "scan" => crate::hotkey::trigger_scan(app),
             "history" => show_history(app),
+            "settings" => show_settings(app),
             "quit" => app.exit(0),
             _ => {}
         })
@@ -59,15 +69,25 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
 
 /// Bring the results window forward and navigate it to `#history`.
 fn show_history<R: Runtime>(app: &AppHandle<R>) {
+    navigate(app, "history");
+}
+
+/// Bring the results window forward and navigate it to `#settings`.
+fn show_settings<R: Runtime>(app: &AppHandle<R>) {
+    navigate(app, "settings");
+}
+
+fn navigate<R: Runtime>(app: &AppHandle<R>, route: &str) {
     crate::windows::show_results_window(app);
     if let Some(window) =
         app.get_webview_window(crate::windows::RESULTS_WINDOW)
     {
-        // Use a JS literal — no interpolation of user-controlled data, so
-        // there's no injection surface. The hashchange event our
-        // App.tsx router listens for fires from this.
-        if let Err(e) = window.eval("window.location.hash = 'history';") {
-            eprintln!("[qrab] failed to navigate to #history: {e}");
+        // Route is a hard-coded literal at the call sites, so there's no
+        // injection surface. The hashchange event our App.tsx router
+        // listens for fires from this.
+        let js = format!("window.location.hash = '{route}';");
+        if let Err(e) = window.eval(&js) {
+            eprintln!("[qrab] failed to navigate to #{route}: {e}");
         }
     }
 }

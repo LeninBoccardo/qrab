@@ -9,6 +9,7 @@ import {
 import { HistoryWindow } from "./windows/HistoryWindow";
 import { RegionSelectWindow } from "./windows/RegionSelectWindow";
 import { ResultsWindow } from "./windows/ResultsWindow";
+import { SettingsWindow } from "./windows/SettingsWindow";
 
 function currentRoute(): string {
   return window.location.hash.slice(1) || "results";
@@ -36,7 +37,9 @@ const App: Component = () => {
       <Match when={route() === "history"}>
         <HistoryWindow />
       </Match>
-      {/* Future routes: #settings (C19) */}
+      <Match when={route() === "settings"}>
+        <SettingsWindow />
+      </Match>
     </Switch>
   );
 };

@@ -9,6 +9,7 @@ import type {
   ScanResult,
   ScanRow,
   ScreenshotMonitorMeta,
+  Settings,
 } from "./types";
 
 export const scanScreen = (): Promise<ScanResult> =>
@@ -70,6 +71,12 @@ export const getScreenshotMonitorPng = (
     screenshotId,
     monitorIndex,
   });
+
+export const getSettings = (): Promise<Settings> =>
+  invoke<Settings>("get_settings");
+
+export const setSettings = (settings: Settings): Promise<void> =>
+  invoke<void>("set_settings", { settings });
 
 /** Event name the Rust hotkey handler emits on press. */
 export const SCAN_EVENT = "qrab:scan";

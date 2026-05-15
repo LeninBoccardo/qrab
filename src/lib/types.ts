@@ -74,3 +74,15 @@ export interface BulkOpenResult {
 /** Mirror of BULK_OPEN_CONFIRM_THRESHOLD in commands.rs (CLAUDE.md §10).
  *  Above this many URLs, ConfirmOpenAll must be shown first. */
 export const BULK_OPEN_CONFIRM_THRESHOLD = 3;
+
+export type Theme = "system" | "light" | "dark";
+
+/** Mirrors `Settings` in src-tauri/src/settings.rs (CLAUDE.md §9). */
+export interface Settings {
+  hotkey: string;
+  autostart: boolean;
+  autoCopyOnSingleResult: boolean;
+  theme: Theme;
+  closeAfterCopy: boolean;
+  closeAfterOpen: boolean;
+}

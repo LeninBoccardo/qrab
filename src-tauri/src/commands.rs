@@ -8,6 +8,7 @@
 use crate::capture::{Capturer, MonitorImage};
 use crate::decoder::{classify_kind, Decoder, QrKind};
 use crate::screenshot::{HeldScreenshot, ScreenshotStore};
+use crate::settings::{Settings, SettingsStore};
 use crate::storage::queries::{
     delete_all, delete_by_id, get_by_id, history_query as history_query_db,
     insert_batch, mark_opened as mark_opened_db, HistoryFilter, NewScanRow,
@@ -37,6 +38,9 @@ pub struct AppState {
     /// frontend on mount so a hotkey that fires *before* the JS listener
     /// is attached (cold WebView2 on first open) still triggers a scan.
     pub pending_scan: Arc<AtomicBool>,
+    /// User-facing settings (CLAUDE.md §9). C19 holds in memory; C20 will
+    /// persist via tauri-plugin-store and re-register the hotkey on change.
+    pub settings: SettingsStore,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -372,6 +376,23 @@ pub async fn hide_results_window(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn consume_pending_scan(state: State<'_, AppState>) -> Result<bool, String> {
     Ok(state.pending_scan.swap(false, Ordering::SeqCst))
+}
+
+/// Return the current user settings.
+#[tauri::command]
+pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
+    Ok(state.settings.get())
+}
+
+/// Replace the user settings. C19 only stores them in memory; C20 will
+/// persist to disk and re-register the global hotkey when it changes.
+#[tauri::command]
+pub async fn set_settings(
+    state: State<'_, AppState>,
+    settings: Settings,
+) -> Result<(), String> {
+    state.settings.set(settings);
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize)]
