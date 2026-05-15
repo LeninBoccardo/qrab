@@ -3,3 +3,6 @@ dist
 
 # Claude Code local settings (project-wide settings.json may be committed)
 .claude/settings.local.json
+
+# Runtime logs (one file per app start — see src-tauri/src/logging.rs)
+logs/

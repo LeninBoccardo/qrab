@@ -8,6 +8,7 @@ pub mod commands;
 pub mod decoder;
 pub mod error;
 pub mod hotkey;
+pub mod logging;
 pub mod screenshot;
 pub mod storage;
 pub mod tray;
@@ -30,6 +31,7 @@ const SCREENSHOT_GC_INTERVAL: Duration = Duration::from_secs(10);
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(logging::build_plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
@@ -49,6 +51,8 @@ pub fn run() {
             get_screenshot_monitor_png
         ])
         .setup(|app| {
+            log::info!("qrab starting (logs dir: {})", logging::logs_dir().display());
+
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
@@ -60,6 +64,7 @@ pub fn run() {
                 .map_err(|e| format!("resolving app_data_dir: {e}"))?;
             std::fs::create_dir_all(&app_data_dir)
                 .map_err(|e| format!("creating app_data_dir: {e}"))?;
+            log::info!("app data dir: {}", app_data_dir.display());
             let storage = Storage::open(app_data_dir.join("qrab.db"))
                 .map_err(|e| format!("opening qrab.db: {e}"))?;
 
@@ -95,6 +100,7 @@ pub fn run() {
                 }
             });
 
+            log::info!("qrab setup complete");
             Ok(())
         })
         .run(tauri::generate_context!())
