@@ -7,7 +7,7 @@ export const EmptyState: Component = () => {
       <ScanLine size={32} />
       <div class="text-sm">No QR codes detected.</div>
       <div class="text-xs text-neutral-400 dark:text-neutral-500">
-        Region selection will arrive in Phase 2.
+        Try "Select region" to pick a specific area of the screen.
       </div>
     </div>
   );

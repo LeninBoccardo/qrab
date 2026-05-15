@@ -250,19 +250,6 @@ pub async fn open_url(
     Ok(())
 }
 
-/// Mark a row as opened without opening the URL — exposed for cases where
-/// the frontend wants to record the interaction separately (e.g. when a
-/// non-URL kind is "viewed").
-#[tauri::command]
-pub async fn mark_opened(
-    state: State<'_, AppState>,
-    id: i64,
-) -> Result<(), String> {
-    mark_opened_db(&state.storage, id, current_epoch_ms())
-        .map_err(|e| format!("storage: {e}"))?;
-    Ok(())
-}
-
 /// Run a paginated history query.
 #[tauri::command]
 pub async fn history_query(
@@ -352,7 +339,7 @@ pub async fn open_urls_bulk(
         match opener.open_url(&url, None::<&str>) {
             Ok(()) => {
                 if let Err(e) = mark_opened_db(&state.storage, id, now_ms) {
-                    eprintln!("[qrab] mark_opened failed for {id}: {e}");
+                    log::warn!("mark_opened failed for {id}: {e}");
                 }
                 opened.push(id);
             }

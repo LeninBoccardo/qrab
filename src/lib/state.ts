@@ -6,6 +6,7 @@ import {
   getSettings as getSettingsIpc,
   setSettings as setSettingsIpc,
 } from "./ipc";
+import { error as logError } from "./log";
 import { applyTheme, watchSystemTheme } from "./theme";
 import type { ScanResult, Settings } from "./types";
 
@@ -35,9 +36,9 @@ export async function loadSettings(): Promise<void> {
     setSettingsSignal(s);
     applyTheme(s.theme);
     watchSystemTheme(s.theme);
-  } catch {
-    // Leave signal null; consumers handle null gracefully. The error is
-    // already captured by the global error logging in index.tsx.
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    void logError(`loadSettings failed: ${msg}`);
   }
 }
 

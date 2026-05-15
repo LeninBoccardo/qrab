@@ -13,6 +13,8 @@ use std::sync::atomic::Ordering;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
+use crate::windows::RESULTS_WINDOW;
+
 pub const DEFAULT_HOTKEY: &str = "CmdOrCtrl+Shift+Q";
 pub const SCAN_EVENT: &str = "qrab:scan";
 
@@ -56,6 +58,17 @@ pub fn register<R: Runtime>(app: &AppHandle<R>, hotkey: &str) -> bool {
 ///      is alive and we want an immediate trigger without polling.
 pub fn trigger_scan<R: Runtime>(app: &AppHandle<R>) {
     crate::windows::show_results_window(app);
+
+    // Make sure the webview is on #results before we fire the scan signal.
+    // Without this, hotkey-while-parked-on-#history or #settings pops the
+    // window forward but ResultsWindow isn't mounted to consume the scan,
+    // and the user thinks the hotkey did nothing. Setting the hash to its
+    // current value is a no-op, so this is safe to call unconditionally.
+    if let Some(window) = app.get_webview_window(RESULTS_WINDOW) {
+        if let Err(e) = window.eval("window.location.hash = 'results';") {
+            log::warn!("failed to navigate to #results from hotkey: {e}");
+        }
+    }
 
     let state = app.state::<crate::commands::AppState>();
     state.pending_scan.store(true, Ordering::SeqCst);

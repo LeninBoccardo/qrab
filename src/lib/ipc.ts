@@ -37,9 +37,6 @@ export const openUrlsBulk = (
 ): Promise<BulkOpenResult> =>
   invoke<BulkOpenResult>("open_urls_bulk", { ids, confirmed });
 
-export const markOpened = (id: number): Promise<void> =>
-  invoke<void>("mark_opened", { id });
-
 export const historyQuery = (filter: HistoryFilter): Promise<ScanRow[]> =>
   invoke<ScanRow[]>("history_query", { filter });
 
