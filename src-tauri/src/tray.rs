@@ -78,16 +78,21 @@ fn show_settings<R: Runtime>(app: &AppHandle<R>) {
 }
 
 fn navigate<R: Runtime>(app: &AppHandle<R>, route: &str) {
+    // Defense in depth: route is `format!`-interpolated into a window.eval
+    // string. Current callers pass hardcoded literals ("history", "settings"),
+    // but a future caller wiring user input here would otherwise be a JS
+    // injection bug. Lowercase-ASCII-only catches that loudly in debug.
+    debug_assert!(
+        !route.is_empty() && route.chars().all(|c| c.is_ascii_lowercase()),
+        "navigate() route must be non-empty lowercase ASCII letters; got {route:?}"
+    );
     crate::windows::show_results_window(app);
     if let Some(window) =
         app.get_webview_window(crate::windows::RESULTS_WINDOW)
     {
-        // Route is a hard-coded literal at the call sites, so there's no
-        // injection surface. The hashchange event our App.tsx router
-        // listens for fires from this.
         let js = format!("window.location.hash = '{route}';");
         if let Err(e) = window.eval(&js) {
-            eprintln!("[qrab] failed to navigate to #{route}: {e}");
+            log::warn!("failed to navigate to #{route}: {e}");
         }
     }
 }

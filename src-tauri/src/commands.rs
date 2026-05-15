@@ -305,6 +305,12 @@ pub async fn history_clear(state: State<'_, AppState>) -> Result<(), String> {
 /// a buggy or compromised frontend can't tab-bomb the user.
 pub const BULK_OPEN_CONFIRM_THRESHOLD: usize = 3;
 
+/// Hard cap on persisted hotkey strings. Real accelerators are well under
+/// 30 chars (`CmdOrCtrl+Shift+Q` = 17); the cap is defense against a
+/// malformed `set_settings` payload trying to wedge megabytes into the
+/// settings store.
+const MAX_HOTKEY_LEN: usize = 64;
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BulkOpenResult {
@@ -408,6 +414,12 @@ pub async fn set_settings(
     state: State<'_, AppState>,
     settings: Settings,
 ) -> Result<(), String> {
+    if settings.hotkey.len() > MAX_HOTKEY_LEN {
+        return Err(format!(
+            "hotkey string too long (max {MAX_HOTKEY_LEN} characters)"
+        ));
+    }
+
     let prev = state.settings.get();
     state.settings.set(settings.clone());
 
