@@ -49,8 +49,18 @@ pub struct ScanRow {
 #[serde(rename_all = "camelCase")]
 pub struct ScanResult {
     pub rows: Vec<ScanRow>,
-    /// Opaque handle the frontend echoes back to `scan_region` (Phase 2).
+    /// Opaque handle the frontend echoes back to `scan_region`.
     pub screenshot_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegionBounds {
+    pub x: u32,
+    pub y: u32,
+    pub w: u32,
+    pub h: u32,
+    pub monitor_index: usize,
 }
 
 /// Capture every monitor, decode, persist the screenshot for region-select,
@@ -87,6 +97,101 @@ pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, Strin
     });
 
     Ok(ScanResult { rows, screenshot_id })
+}
+
+/// Decode a sub-rectangle of a previously-held screenshot.
+///
+/// The frontend passes the `screenshot_id` it received from `scan_screen`
+/// together with the user's rubber-banded `bounds` (in image pixels of
+/// the chosen monitor). The held image is cropped and the decoder runs
+/// on the crop only.
+#[tauri::command]
+pub async fn scan_region(
+    state: State<'_, AppState>,
+    screenshot_id: String,
+    bounds: RegionBounds,
+) -> Result<ScanResult, String> {
+    let held = state
+        .screenshots
+        .get_if_id(&screenshot_id)
+        .ok_or_else(|| "screenshot not found or expired".to_string())?;
+    let decoder = state.decoder.clone();
+    let scanned_at = current_epoch_ms();
+    let batch_id = new_id("batch");
+
+    let rows: Vec<ScanRow> = tokio::task::spawn_blocking(
+        move || -> Result<Vec<ScanRow>, String> {
+            let monitor = held
+                .monitors
+                .iter()
+                .find(|m| m.index == bounds.monitor_index)
+                .ok_or_else(|| {
+                    format!(
+                        "monitor index {} not in screenshot",
+                        bounds.monitor_index
+                    )
+                })?;
+            decode_region(
+                decoder.as_ref(),
+                &monitor.image,
+                &bounds,
+                &batch_id,
+                scanned_at,
+            )
+        },
+    )
+    .await
+    .map_err(|e| format!("region decode task panicked: {e}"))??;
+
+    Ok(ScanResult { rows, screenshot_id })
+}
+
+/// Crop `image` to `bounds` and decode the crop. Validates bounds against
+/// the source image so an out-of-range region surfaces as a typed error
+/// rather than a panic from `crop_imm`.
+fn decode_region<D: Decoder + ?Sized>(
+    decoder: &D,
+    image: &image::RgbaImage,
+    bounds: &RegionBounds,
+    batch_id: &str,
+    scanned_at: i64,
+) -> Result<Vec<ScanRow>, String> {
+    if bounds.w == 0 || bounds.h == 0 {
+        return Err("region must have non-zero width and height".into());
+    }
+    let (img_w, img_h) = image.dimensions();
+    if bounds.x.saturating_add(bounds.w) > img_w
+        || bounds.y.saturating_add(bounds.h) > img_h
+    {
+        return Err(format!(
+            "bounds out of image (image {img_w}x{img_h}, region {}+{}, {}+{})",
+            bounds.x, bounds.w, bounds.y, bounds.h
+        ));
+    }
+
+    let crop =
+        image::imageops::crop_imm(image, bounds.x, bounds.y, bounds.w, bounds.h)
+            .to_image();
+
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut rows = Vec::new();
+    for content in decoder.decode(&crop) {
+        if !seen.insert(content.clone()) {
+            continue;
+        }
+        let kind = classify_kind(&content);
+        rows.push(ScanRow {
+            id: -1,
+            batch_id: batch_id.to_string(),
+            content,
+            kind,
+            monitor_index: bounds.monitor_index as i64,
+            scanned_at,
+            opened: false,
+            opened_at: None,
+        });
+    }
+    Ok(rows)
 }
 
 /// Write `text` to the system clipboard.
@@ -238,5 +343,87 @@ mod tests {
         assert!(rows.iter().all(|r| r.scanned_at == 42));
         assert!(rows.iter().all(|r| !r.opened));
         assert!(rows.iter().all(|r| r.opened_at.is_none()));
+    }
+
+    fn bounds(x: u32, y: u32, w: u32, h: u32) -> RegionBounds {
+        RegionBounds { x, y, w, h, monitor_index: 0 }
+    }
+
+    #[test]
+    fn decode_region_rejects_zero_size() {
+        let decoder = FakeDecoder::new(vec![]);
+        let img = RgbaImage::new(100, 100);
+        let err =
+            decode_region(&decoder, &img, &bounds(0, 0, 0, 10), "b", 0).unwrap_err();
+        assert!(err.contains("non-zero"));
+        let err =
+            decode_region(&decoder, &img, &bounds(0, 0, 10, 0), "b", 0).unwrap_err();
+        assert!(err.contains("non-zero"));
+    }
+
+    #[test]
+    fn decode_region_rejects_out_of_bounds() {
+        let decoder = FakeDecoder::new(vec![]);
+        let img = RgbaImage::new(100, 100);
+        let err = decode_region(&decoder, &img, &bounds(50, 50, 60, 60), "b", 0)
+            .unwrap_err();
+        assert!(err.contains("out of image"));
+    }
+
+    #[test]
+    fn decode_region_returns_decoder_results_within_bounds() {
+        let decoder = FakeDecoder::new(vec![vec![
+            "https://example.com".into(),
+            "https://example.com".into(), // duplicate — should dedup
+            "other".into(),
+        ]]);
+        let img = RgbaImage::new(100, 100);
+        let rows =
+            decode_region(&decoder, &img, &bounds(10, 10, 20, 20), "b-1", 7)
+                .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].content, "https://example.com");
+        assert_eq!(rows[1].content, "other");
+        assert!(rows.iter().all(|r| r.batch_id == "b-1"));
+        assert!(rows.iter().all(|r| r.scanned_at == 7));
+        assert!(rows.iter().all(|r| r.monitor_index == 0));
+    }
+
+    #[test]
+    fn decode_region_end_to_end_crops_and_decodes() {
+        use crate::decoder::RqrrDecoder;
+        use image::Rgba;
+
+        let qr_img: image::GrayImage = qrcode::QrCode::new(b"https://qrab.test")
+            .expect("qrcode encode")
+            .render::<image::Luma<u8>>()
+            .quiet_zone(true)
+            .module_dimensions(8, 8)
+            .build();
+        let qr_rgba = image::DynamicImage::ImageLuma8(qr_img).to_rgba8();
+        let (qw, qh) = qr_rgba.dimensions();
+
+        // Place the QR at (50, 60) on a 600x500 canvas filled with noise-free
+        // white so anything OUTSIDE the bounds wouldn't decode.
+        let mut canvas =
+            image::RgbaImage::from_pixel(600, 500, Rgba([255, 255, 255, 255]));
+        image::imageops::overlay(&mut canvas, &qr_rgba, 50, 60);
+
+        let decoder = RqrrDecoder::new();
+        let rows = decode_region(
+            &decoder,
+            &canvas,
+            &RegionBounds { x: 50, y: 60, w: qw, h: qh, monitor_index: 3 },
+            "batch-region",
+            123,
+        )
+        .expect("decode_region ok");
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].content, "https://qrab.test");
+        assert_eq!(rows[0].kind, QrKind::Url);
+        assert_eq!(rows[0].monitor_index, 3);
+        assert_eq!(rows[0].batch_id, "batch-region");
+        assert_eq!(rows[0].scanned_at, 123);
     }
 }

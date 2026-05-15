@@ -2,10 +2,16 @@
 // and there's one file to grep when the Rust side changes.
 
 import { invoke } from "@tauri-apps/api/core";
-import type { ScanResult } from "./types";
+import type { RegionBounds, ScanResult } from "./types";
 
 export const scanScreen = (): Promise<ScanResult> =>
   invoke<ScanResult>("scan_screen");
+
+export const scanRegion = (
+  screenshotId: string,
+  bounds: RegionBounds,
+): Promise<ScanResult> =>
+  invoke<ScanResult>("scan_region", { screenshotId, bounds });
 
 export const copyToClipboard = (text: string): Promise<void> =>
   invoke<void>("copy_to_clipboard", { text });

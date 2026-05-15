@@ -15,7 +15,7 @@ pub mod windows;
 use capture::XcapCapturer;
 use commands::{
     consume_pending_scan, copy_to_clipboard, hide_results_window, open_url,
-    scan_screen, AppState,
+    scan_region, scan_screen, AppState,
 };
 use decoder::RqrrDecoder;
 use screenshot::ScreenshotStore;
@@ -40,6 +40,7 @@ pub fn run() {
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             scan_screen,
+            scan_region,
             copy_to_clipboard,
             open_url,
             hide_results_window,

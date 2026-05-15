@@ -26,6 +26,15 @@ export interface ScanRow {
 
 export interface ScanResult {
   rows: ScanRow[];
-  /** Opaque handle echoed back to `scan_region` (Phase 2). */
+  /** Opaque handle echoed back to `scan_region`. */
   screenshotId: string;
+}
+
+/** Rectangle in image-native pixels of a given monitor. */
+export interface RegionBounds {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  monitorIndex: number;
 }
