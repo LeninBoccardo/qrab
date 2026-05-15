@@ -1,16 +1,12 @@
-import {
-  Component,
-  createSignal,
-  onMount,
-  Show,
-} from "solid-js";
-import { Trash2 } from "lucide-solid";
+import { Component, createSignal, onMount, Show } from "solid-js";
+import { ExternalLink, Trash2 } from "lucide-solid";
 import { Titlebar } from "../components/Titlebar";
 import { HistoryFilters, type FilterValue } from "../components/HistoryFilters";
 import { HistoryTable } from "../components/HistoryTable";
 import { Button } from "../components/ui/Button";
 import * as Dialog from "../components/ui/Dialog";
 import { Toaster, showToast } from "../components/ui/Toast";
+import { ConfirmOpenAll } from "../components/ConfirmOpenAll";
 import {
   copyToClipboard,
   hideResultsWindow,
@@ -18,7 +14,9 @@ import {
   historyDelete,
   historyQuery,
   openUrl,
+  openUrlsBulk,
 } from "../lib/ipc";
+import { planOpenAll } from "../lib/bulkOpen";
 import type { HistoryFilter, ScanRow } from "../lib/types";
 
 const PAGE_SIZE = 50;
@@ -31,6 +29,9 @@ export const HistoryWindow: Component = () => {
   const [loading, setLoading] = createSignal(false);
   const [selected, setSelected] = createSignal<Set<number>>(new Set<number>());
   const [clearConfirm, setClearConfirm] = createSignal(false);
+  const [confirmOpen, setConfirmOpen] = createSignal(false);
+  const [pendingUrlRows, setPendingUrlRows] = createSignal<ScanRow[]>([]);
+  const [pendingSkipped, setPendingSkipped] = createSignal(0);
 
   async function load(reset: boolean): Promise<void> {
     if (loading()) return;
@@ -135,6 +136,62 @@ export const HistoryWindow: Component = () => {
     }
   }
 
+  function markRowsOpened(ids: number[]): void {
+    if (ids.length === 0) return;
+    const now = Date.now();
+    const idSet = new Set(ids);
+    setRows((prev) =>
+      prev.map((r) =>
+        idSet.has(r.id) ? { ...r, opened: true, openedAt: now } : r,
+      ),
+    );
+  }
+
+  async function executeOpenAll(
+    ids: number[],
+    confirmed: boolean,
+  ): Promise<void> {
+    try {
+      const result = await openUrlsBulk(ids, confirmed);
+      markRowsOpened(result.opened);
+      const lines = [`Opened ${result.opened.length}`];
+      if (result.failed.length > 0)
+        lines.push(`${result.failed.length} failed`);
+      if (result.skippedNonUrl > 0)
+        lines.push(`${result.skippedNonUrl} skipped`);
+      showToast(lines.join(", "));
+    } catch (err) {
+      showToast(`Open all failed: ${formatError(err)}`);
+    }
+  }
+
+  async function openSelected(): Promise<void> {
+    const selectedRows = rows().filter((r) => selected().has(r.id));
+    const plan = planOpenAll(selectedRows);
+    if (plan.urlRows.length === 0) {
+      showToast("No URLs in selection to open");
+      return;
+    }
+    if (plan.needsConfirm) {
+      setPendingUrlRows(plan.urlRows);
+      setPendingSkipped(plan.skippedNonUrl);
+      setConfirmOpen(true);
+      return;
+    }
+    await executeOpenAll(
+      plan.urlRows.map((r) => r.id),
+      false,
+    );
+  }
+
+  async function confirmOpenAllAndRun(): Promise<void> {
+    setConfirmOpen(false);
+    await executeOpenAll(
+      pendingUrlRows().map((r) => r.id),
+      true,
+    );
+  }
+
   async function confirmClearAll(): Promise<void> {
     try {
       await historyClear();
@@ -165,6 +222,9 @@ export const HistoryWindow: Component = () => {
           <span class="flex-1" />
           <Button variant="ghost" onClick={clearSelection}>
             Clear
+          </Button>
+          <Button variant="secondary" onClick={() => void openSelected()}>
+            <ExternalLink size={14} /> Open URLs
           </Button>
           <Button variant="primary" onClick={() => void deleteSelected()}>
             <Trash2 size={14} /> Delete selected
@@ -230,6 +290,14 @@ export const HistoryWindow: Component = () => {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
+      <ConfirmOpenAll
+        open={confirmOpen()}
+        onOpenChange={setConfirmOpen}
+        rows={pendingUrlRows()}
+        skippedNonUrl={pendingSkipped()}
+        onConfirm={() => void confirmOpenAllAndRun()}
+      />
 
       <Toaster />
     </main>

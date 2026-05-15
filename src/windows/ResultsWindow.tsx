@@ -8,20 +8,23 @@ import {
   Show,
 } from "solid-js";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { Crop, ScanLine } from "lucide-solid";
+import { Crop, ExternalLink, ScanLine } from "lucide-solid";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { ResultCard } from "../components/ResultCard";
 import { EmptyState } from "../components/EmptyState";
 import { Titlebar } from "../components/Titlebar";
 import { Button } from "../components/ui/Button";
+import { ConfirmOpenAll } from "../components/ConfirmOpenAll";
 import {
   consumePendingScan,
   copyToClipboard,
   hideResultsWindow,
   openUrl,
+  openUrlsBulk,
   scanScreen,
   SCAN_EVENT,
 } from "../lib/ipc";
+import { planOpenAll } from "../lib/bulkOpen";
 import {
   scanResult,
   setActiveScreenshotId,
@@ -35,6 +38,13 @@ export const ResultsWindow: Component = () => {
 
   const rows = createMemo<ScanRow[]>(() => scanResult()?.rows ?? []);
   const hasScanned = createMemo(() => scanResult() !== null);
+  const urlRowCount = createMemo(
+    () => rows().filter((r) => r.kind === "url").length,
+  );
+
+  const [confirmOpen, setConfirmOpen] = createSignal(false);
+  const [pendingUrlRows, setPendingUrlRows] = createSignal<ScanRow[]>([]);
+  const [pendingSkipped, setPendingSkipped] = createSignal(0);
 
   async function scan(): Promise<void> {
     if (loading()) return;
@@ -78,6 +88,63 @@ export const ResultsWindow: Component = () => {
     } catch (err) {
       showToast(`Open failed: ${formatError(err)}`);
     }
+  }
+
+  function markRowsOpened(ids: number[]): void {
+    const now = Date.now();
+    const idSet = new Set(ids);
+    const r = scanResult();
+    if (!r) return;
+    setScanResult({
+      ...r,
+      rows: r.rows.map((row) =>
+        idSet.has(row.id) ? { ...row, opened: true, openedAt: now } : row,
+      ),
+    });
+  }
+
+  async function executeOpenAll(
+    ids: number[],
+    confirmed: boolean,
+  ): Promise<void> {
+    try {
+      const result = await openUrlsBulk(ids, confirmed);
+      markRowsOpened(result.opened);
+      const lines = [`Opened ${result.opened.length}`];
+      if (result.failed.length > 0)
+        lines.push(`${result.failed.length} failed`);
+      if (result.skippedNonUrl > 0)
+        lines.push(`${result.skippedNonUrl} skipped`);
+      showToast(lines.join(", "));
+    } catch (err) {
+      showToast(`Open all failed: ${formatError(err)}`);
+    }
+  }
+
+  async function openAll(): Promise<void> {
+    const plan = planOpenAll(rows());
+    if (plan.urlRows.length === 0) {
+      showToast("No URLs to open");
+      return;
+    }
+    if (plan.needsConfirm) {
+      setPendingUrlRows(plan.urlRows);
+      setPendingSkipped(plan.skippedNonUrl);
+      setConfirmOpen(true);
+      return;
+    }
+    await executeOpenAll(
+      plan.urlRows.map((r) => r.id),
+      false,
+    );
+  }
+
+  async function confirmOpenAllAndRun(): Promise<void> {
+    setConfirmOpen(false);
+    await executeOpenAll(
+      pendingUrlRows().map((r) => r.id),
+      true,
+    );
   }
 
   function onKeyDown(e: KeyboardEvent): void {
@@ -126,6 +193,16 @@ export const ResultsWindow: Component = () => {
       <Titlebar onClose={() => void hideResultsWindow()} />
 
       <div class="flex shrink-0 items-center justify-end gap-2 border-b border-neutral-200/60 px-3 py-1.5 dark:border-neutral-800/60">
+        <Show when={urlRowCount() > 0}>
+          <Button
+            variant="secondary"
+            onClick={() => void openAll()}
+            title="Open every URL in the results"
+          >
+            <ExternalLink size={16} />
+            Open all {urlRowCount() > 1 ? `(${urlRowCount()})` : ""}
+          </Button>
+        </Show>
         <Button
           variant="secondary"
           onClick={selectRegion}
@@ -172,6 +249,14 @@ export const ResultsWindow: Component = () => {
           </div>
         </Show>
       </div>
+
+      <ConfirmOpenAll
+        open={confirmOpen()}
+        onOpenChange={setConfirmOpen}
+        rows={pendingUrlRows()}
+        skippedNonUrl={pendingSkipped()}
+        onConfirm={() => void confirmOpenAllAndRun()}
+      />
 
       <Toaster />
     </main>
