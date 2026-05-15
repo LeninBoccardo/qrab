@@ -74,7 +74,7 @@ export const ResultsWindow: Component = () => {
 
   async function openRow(row: ScanRow): Promise<void> {
     try {
-      await openUrl(row.content);
+      await openUrl(row.id);
     } catch (err) {
       showToast(`Open failed: ${formatError(err)}`);
     }

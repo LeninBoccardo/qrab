@@ -6,9 +6,13 @@
 //! stays responsive.
 
 use crate::capture::{Capturer, MonitorImage};
-use crate::decoder::{classify_kind, Decoder};
+use crate::decoder::{classify_kind, Decoder, QrKind};
 use crate::screenshot::{HeldScreenshot, ScreenshotStore};
-use crate::storage::queries::{insert_batch, NewScanRow, ScanRow};
+use crate::storage::queries::{
+    delete_all, delete_by_id, get_by_id, history_query as history_query_db,
+    insert_batch, mark_opened as mark_opened_db, HistoryFilter, NewScanRow,
+    ScanRow,
+};
 use crate::storage::Storage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -219,13 +223,67 @@ pub async fn copy_to_clipboard(app: AppHandle, text: String) -> Result<(), Strin
     app.clipboard().write_text(text).map_err(|e| e.to_string())
 }
 
-/// Open `url` in the user's default browser. Pre-DB this is fire-and-forget;
-/// C13 will additionally mark the row's `opened` flag in storage.
+/// Open a stored row's URL in the user's default browser and mark the
+/// row as opened. The frontend passes the row id rather than the URL so
+/// the open-and-mark pair is atomic on the Rust side.
 #[tauri::command]
-pub async fn open_url(app: AppHandle, url: String) -> Result<(), String> {
+pub async fn open_url(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<(), String> {
+    let row = get_by_id(&state.storage, id)
+        .map_err(|e| format!("storage: {e}"))?
+        .ok_or_else(|| format!("row {id} not found"))?;
+    if row.kind != QrKind::Url {
+        return Err(format!("row {id} is not a URL ({:?})", row.kind));
+    }
     app.opener()
-        .open_url(url, None::<&str>)
-        .map_err(|e| e.to_string())
+        .open_url(&row.content, None::<&str>)
+        .map_err(|e| e.to_string())?;
+    mark_opened_db(&state.storage, id, current_epoch_ms())
+        .map_err(|e| format!("storage: {e}"))?;
+    Ok(())
+}
+
+/// Mark a row as opened without opening the URL — exposed for cases where
+/// the frontend wants to record the interaction separately (e.g. when a
+/// non-URL kind is "viewed").
+#[tauri::command]
+pub async fn mark_opened(
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<(), String> {
+    mark_opened_db(&state.storage, id, current_epoch_ms())
+        .map_err(|e| format!("storage: {e}"))?;
+    Ok(())
+}
+
+/// Run a paginated history query.
+#[tauri::command]
+pub async fn history_query(
+    state: State<'_, AppState>,
+    filter: HistoryFilter,
+) -> Result<Vec<ScanRow>, String> {
+    history_query_db(&state.storage, &filter)
+        .map_err(|e| format!("storage: {e}"))
+}
+
+/// Delete one row from history.
+#[tauri::command]
+pub async fn history_delete(
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<(), String> {
+    delete_by_id(&state.storage, id).map_err(|e| format!("storage: {e}"))?;
+    Ok(())
+}
+
+/// Wipe the whole history table.
+#[tauri::command]
+pub async fn history_clear(state: State<'_, AppState>) -> Result<(), String> {
+    delete_all(&state.storage).map_err(|e| format!("storage: {e}"))?;
+    Ok(())
 }
 
 /// Hide the results window. Bound to Esc and the titlebar Close button.

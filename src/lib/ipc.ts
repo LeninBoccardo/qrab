@@ -3,8 +3,10 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  HistoryFilter,
   RegionBounds,
   ScanResult,
+  ScanRow,
   ScreenshotMonitorMeta,
 } from "./types";
 
@@ -20,8 +22,21 @@ export const scanRegion = (
 export const copyToClipboard = (text: string): Promise<void> =>
   invoke<void>("copy_to_clipboard", { text });
 
-export const openUrl = (url: string): Promise<void> =>
-  invoke<void>("open_url", { url });
+/** Open the row's URL in the user's browser and stamp `opened_at`. */
+export const openUrl = (id: number): Promise<void> =>
+  invoke<void>("open_url", { id });
+
+export const markOpened = (id: number): Promise<void> =>
+  invoke<void>("mark_opened", { id });
+
+export const historyQuery = (filter: HistoryFilter): Promise<ScanRow[]> =>
+  invoke<ScanRow[]>("history_query", { filter });
+
+export const historyDelete = (id: number): Promise<void> =>
+  invoke<void>("history_delete", { id });
+
+export const historyClear = (): Promise<void> =>
+  invoke<void>("history_clear");
 
 export const hideResultsWindow = (): Promise<void> =>
   invoke<void>("hide_results_window");

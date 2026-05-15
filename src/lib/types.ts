@@ -45,3 +45,17 @@ export interface ScreenshotMonitorMeta {
   width: number;
   height: number;
 }
+
+/** Filter parameters for `history_query`. Absent fields are unfiltered. */
+export interface HistoryFilter {
+  search?: string;
+  kind?: QrKind;
+  openedOnly?: boolean;
+  unopenedOnly?: boolean;
+  /** Unix epoch ms — inclusive lower bound on scannedAt. */
+  from?: number;
+  /** Unix epoch ms — inclusive upper bound on scannedAt. */
+  to?: number;
+  limit: number;
+  offset: number;
+}

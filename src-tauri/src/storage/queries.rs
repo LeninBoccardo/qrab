@@ -4,7 +4,7 @@
 
 use crate::decoder::QrKind;
 use crate::storage::Storage;
-use rusqlite::{params, Row};
+use rusqlite::{params, params_from_iter, Row, ToSql};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -115,6 +115,95 @@ pub fn get_by_id(storage: &Storage, id: i64) -> rusqlite::Result<Option<ScanRow>
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e),
     }
+}
+
+/// Filter parameters for [`history_query`]. Matches the §7 frontend type.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryFilter {
+    pub search: Option<String>,
+    pub kind: Option<QrKind>,
+    pub opened_only: Option<bool>,
+    pub unopened_only: Option<bool>,
+    pub from: Option<i64>,
+    pub to: Option<i64>,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+/// Paginated, sorted history query. Newest first (scanned_at DESC, id DESC
+/// breaks ties). Filters compose with AND; an absent field is unfiltered.
+pub fn history_query(
+    storage: &Storage,
+    filter: &HistoryFilter,
+) -> rusqlite::Result<Vec<ScanRow>> {
+    let mut sql = String::from(
+        "SELECT id, batch_id, content, kind, monitor_index, scanned_at, opened, opened_at
+         FROM scans WHERE 1=1",
+    );
+    let mut bound: Vec<Box<dyn ToSql>> = Vec::new();
+
+    if let Some(s) = filter.search.as_deref().filter(|s| !s.is_empty()) {
+        sql.push_str(" AND content LIKE ?");
+        bound.push(Box::new(format!("%{s}%")));
+    }
+    if let Some(k) = filter.kind {
+        sql.push_str(" AND kind = ?");
+        bound.push(Box::new(qrkind_to_str(k).to_string()));
+    }
+    if filter.opened_only == Some(true) {
+        sql.push_str(" AND opened = 1");
+    }
+    if filter.unopened_only == Some(true) {
+        sql.push_str(" AND opened = 0");
+    }
+    if let Some(from) = filter.from {
+        sql.push_str(" AND scanned_at >= ?");
+        bound.push(Box::new(from));
+    }
+    if let Some(to) = filter.to {
+        sql.push_str(" AND scanned_at <= ?");
+        bound.push(Box::new(to));
+    }
+    sql.push_str(" ORDER BY scanned_at DESC, id DESC LIMIT ? OFFSET ?");
+    bound.push(Box::new(filter.limit.max(0)));
+    bound.push(Box::new(filter.offset.max(0)));
+
+    let conn = storage.lock();
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(
+            params_from_iter(bound.iter().map(|b| b.as_ref())),
+            ScanRow::from_db_row,
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Mark a row as opened, stamping `opened_at` to `now_ms` (Unix epoch ms).
+/// Returns the number of rows updated — `0` if the row doesn't exist.
+pub fn mark_opened(
+    storage: &Storage,
+    id: i64,
+    now_ms: i64,
+) -> rusqlite::Result<usize> {
+    let conn = storage.lock();
+    conn.execute(
+        "UPDATE scans SET opened = 1, opened_at = ?1 WHERE id = ?2",
+        params![now_ms, id],
+    )
+}
+
+/// Delete one row. Returns the number of rows deleted.
+pub fn delete_by_id(storage: &Storage, id: i64) -> rusqlite::Result<usize> {
+    let conn = storage.lock();
+    conn.execute("DELETE FROM scans WHERE id = ?1", params![id])
+}
+
+/// Wipe the entire history. Returns the number of rows deleted.
+pub fn delete_all(storage: &Storage) -> rusqlite::Result<usize> {
+    let conn = storage.lock();
+    conn.execute("DELETE FROM scans", [])
 }
 
 fn qrkind_to_str(kind: QrKind) -> &'static str {
@@ -247,5 +336,181 @@ mod tests {
             let row = get_by_id(&storage, id).expect("get").expect("some");
             assert_eq!(row.kind, *k, "kind round-trip failed for {:?}", k);
         }
+    }
+
+    fn empty_filter(limit: i64) -> HistoryFilter {
+        HistoryFilter {
+            search: None,
+            kind: None,
+            opened_only: None,
+            unopened_only: None,
+            from: None,
+            to: None,
+            limit,
+            offset: 0,
+        }
+    }
+
+    fn seed_history(storage: &Storage) -> Vec<i64> {
+        let rows = vec![
+            NewScanRow {
+                batch_id: "B1",
+                content: "https://alpha.test",
+                kind: QrKind::Url,
+                monitor_index: 0,
+                scanned_at: 100,
+            },
+            NewScanRow {
+                batch_id: "B1",
+                content: "mailto:bob@beta.test",
+                kind: QrKind::Email,
+                monitor_index: 0,
+                scanned_at: 200,
+            },
+            NewScanRow {
+                batch_id: "B2",
+                content: "https://gamma.test",
+                kind: QrKind::Url,
+                monitor_index: 1,
+                scanned_at: 300,
+            },
+            NewScanRow {
+                batch_id: "B3",
+                content: "plain delta text",
+                kind: QrKind::Text,
+                monitor_index: 0,
+                scanned_at: 400,
+            },
+        ];
+        insert_batch(storage, &rows).expect("seed")
+    }
+
+    #[test]
+    fn history_query_returns_newest_first() {
+        let storage = fresh();
+        seed_history(&storage);
+        let rows = history_query(&storage, &empty_filter(10)).expect("query");
+        let contents: Vec<&str> = rows.iter().map(|r| r.content.as_str()).collect();
+        assert_eq!(
+            contents,
+            vec![
+                "plain delta text",       // scanned_at = 400
+                "https://gamma.test",     // 300
+                "mailto:bob@beta.test",   // 200
+                "https://alpha.test",     // 100
+            ],
+        );
+    }
+
+    #[test]
+    fn history_query_search_filters_by_content_like() {
+        let storage = fresh();
+        seed_history(&storage);
+        let mut f = empty_filter(10);
+        f.search = Some("gamma".into());
+        let rows = history_query(&storage, &f).expect("query");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].content, "https://gamma.test");
+    }
+
+    #[test]
+    fn history_query_kind_filter_narrows_to_one_kind() {
+        let storage = fresh();
+        seed_history(&storage);
+        let mut f = empty_filter(10);
+        f.kind = Some(QrKind::Url);
+        let rows = history_query(&storage, &f).expect("query");
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|r| r.kind == QrKind::Url));
+    }
+
+    #[test]
+    fn history_query_date_range_filters_inclusive() {
+        let storage = fresh();
+        seed_history(&storage);
+        let mut f = empty_filter(10);
+        f.from = Some(200);
+        f.to = Some(300);
+        let rows = history_query(&storage, &f).expect("query");
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|r| r.scanned_at >= 200 && r.scanned_at <= 300));
+    }
+
+    #[test]
+    fn history_query_paginates_via_limit_and_offset() {
+        let storage = fresh();
+        seed_history(&storage);
+        let mut f = empty_filter(2);
+        let page1 = history_query(&storage, &f).expect("page1");
+        assert_eq!(page1.len(), 2);
+        f.offset = 2;
+        let page2 = history_query(&storage, &f).expect("page2");
+        assert_eq!(page2.len(), 2);
+        // No overlap between pages
+        let ids1: Vec<i64> = page1.iter().map(|r| r.id).collect();
+        let ids2: Vec<i64> = page2.iter().map(|r| r.id).collect();
+        assert!(ids1.iter().all(|id| !ids2.contains(id)));
+    }
+
+    #[test]
+    fn history_query_opened_only_and_unopened_only_split_correctly() {
+        let storage = fresh();
+        let ids = seed_history(&storage);
+        // Mark the first two as opened
+        mark_opened(&storage, ids[0], 500).expect("mark0");
+        mark_opened(&storage, ids[1], 600).expect("mark1");
+
+        let mut f = empty_filter(10);
+        f.opened_only = Some(true);
+        let opened = history_query(&storage, &f).expect("query");
+        assert_eq!(opened.len(), 2);
+        assert!(opened.iter().all(|r| r.opened));
+
+        let mut f = empty_filter(10);
+        f.unopened_only = Some(true);
+        let unopened = history_query(&storage, &f).expect("query");
+        assert_eq!(unopened.len(), 2);
+        assert!(unopened.iter().all(|r| !r.opened));
+    }
+
+    #[test]
+    fn mark_opened_sets_opened_and_opened_at() {
+        let storage = fresh();
+        let ids = seed_history(&storage);
+        let updated = mark_opened(&storage, ids[0], 1234).expect("mark");
+        assert_eq!(updated, 1);
+        let row = get_by_id(&storage, ids[0]).expect("get").expect("some");
+        assert!(row.opened);
+        assert_eq!(row.opened_at, Some(1234));
+    }
+
+    #[test]
+    fn mark_opened_missing_row_returns_zero() {
+        let storage = fresh();
+        let updated = mark_opened(&storage, 9999, 1).expect("mark");
+        assert_eq!(updated, 0);
+    }
+
+    #[test]
+    fn delete_by_id_removes_a_single_row() {
+        let storage = fresh();
+        let ids = seed_history(&storage);
+        let removed = delete_by_id(&storage, ids[1]).expect("delete");
+        assert_eq!(removed, 1);
+        assert!(get_by_id(&storage, ids[1]).expect("get").is_none());
+        let remaining =
+            history_query(&storage, &empty_filter(10)).expect("query");
+        assert_eq!(remaining.len(), 3);
+    }
+
+    #[test]
+    fn delete_all_empties_the_table() {
+        let storage = fresh();
+        seed_history(&storage);
+        let removed = delete_all(&storage).expect("clear");
+        assert_eq!(removed, 4);
+        let remaining =
+            history_query(&storage, &empty_filter(10)).expect("query");
+        assert!(remaining.is_empty());
     }
 }
