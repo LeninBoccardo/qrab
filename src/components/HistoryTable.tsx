@@ -79,7 +79,7 @@ export const HistoryTable: Component<HistoryTableProps> = (props) => {
               )}
             </button>
           </th>
-          <th class="w-20 px-2 py-2">Opened</th>
+          <th class="w-36 px-2 py-2">Status</th>
           <th class="w-32 px-2 py-2 text-right">Actions</th>
         </tr>
       </thead>
@@ -129,21 +129,35 @@ export const HistoryTable: Component<HistoryTableProps> = (props) => {
                   {relativeTime(row.scannedAt)}
                 </td>
                 <td class="px-2 py-2 text-xs">
-                  <Show
-                    when={row.opened}
-                    fallback={<span class="text-neutral-400">—</span>}
-                  >
-                    <span
-                      class="text-green-600 dark:text-green-400"
-                      title={
-                        row.openedAt !== null
-                          ? absoluteTime(row.openedAt)
-                          : undefined
-                      }
-                    >
-                      Yes
-                    </span>
-                  </Show>
+                  <div class="flex flex-wrap items-center gap-1">
+                    <Show when={row.opened}>
+                      <span
+                        class="rounded bg-green-100 px-1.5 py-0.5 text-[11px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300"
+                        title={
+                          row.openedAt !== null
+                            ? `Opened ${absoluteTime(row.openedAt)}`
+                            : undefined
+                        }
+                      >
+                        Opened
+                      </span>
+                    </Show>
+                    <Show when={row.copied}>
+                      <span
+                        class="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                        title={
+                          row.copiedAt !== null
+                            ? `Copied ${absoluteTime(row.copiedAt)}`
+                            : undefined
+                        }
+                      >
+                        Copied
+                      </span>
+                    </Show>
+                    <Show when={!row.opened && !row.copied}>
+                      <span class="text-neutral-400">—</span>
+                    </Show>
+                  </div>
                 </td>
                 <td class="px-2 py-2 text-right">
                   <div class="inline-flex items-center gap-0.5">

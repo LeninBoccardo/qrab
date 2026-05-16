@@ -5,10 +5,6 @@ import type { HistoryFilter, QrKind, StatusFilter } from "../lib/types";
 /** What the filter bar emits — limit/offset and sortDir are owned by the parent. */
 export type FilterValue = Omit<HistoryFilter, "limit" | "offset" | "sortDir">;
 
-/** Local 3-state for the C2 dropdown — C5 expands it to 4 states once
- *  the Status column / copied filter ship. */
-type OpenedFilter = "all" | "opened" | "unopened";
-
 function dateInputToMs(value: string, endOfDay: boolean): number | undefined {
   if (!value) return undefined;
   // <input type="date"> emits ISO-8601 yyyy-mm-dd. Parse as local time
@@ -40,12 +36,8 @@ export const HistoryFilters: Component<HistoryFiltersProps> = (props) => {
   const [kind, setKind] = createSignal<QrKind | "all">(
     props.value.kind ?? "all",
   );
-  const [opened, setOpened] = createSignal<OpenedFilter>(
-    props.value.status === "opened"
-      ? "opened"
-      : props.value.status === "untouched"
-        ? "unopened"
-        : "all",
+  const [status, setStatus] = createSignal<StatusFilter>(
+    props.value.status ?? "all",
   );
   const [from, setFrom] = createSignal(msToDateInput(props.value.from));
   const [to, setTo] = createSignal(msToDateInput(props.value.to));
@@ -56,16 +48,10 @@ export const HistoryFilters: Component<HistoryFiltersProps> = (props) => {
   function emit(): void {
     if (debounceTimer !== undefined) window.clearTimeout(debounceTimer);
     debounceTimer = window.setTimeout(() => {
-      const status: StatusFilter | undefined =
-        opened() === "opened"
-          ? "opened"
-          : opened() === "unopened"
-            ? "untouched"
-            : undefined;
       const next: FilterValue = {
         search: search() || undefined,
         kind: kind() === "all" ? undefined : (kind() as QrKind),
-        status,
+        status: status() === "all" ? undefined : status(),
         from: dateInputToMs(from(), false),
         to: dateInputToMs(to(), true),
       };
@@ -111,19 +97,20 @@ export const HistoryFilters: Component<HistoryFiltersProps> = (props) => {
 
       <div class="flex flex-col gap-1">
         <label class="text-xs font-medium text-neutral-600 dark:text-neutral-400">
-          Opened
+          Status
         </label>
         <select
           class="rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-          value={opened()}
+          value={status()}
           onChange={(e) => {
-            setOpened(e.currentTarget.value as OpenedFilter);
+            setStatus(e.currentTarget.value as StatusFilter);
             emit();
           }}
         >
           <option value="all">All</option>
           <option value="opened">Opened</option>
-          <option value="unopened">Unopened</option>
+          <option value="copied">Copied</option>
+          <option value="untouched">Untouched</option>
         </select>
       </div>
 
