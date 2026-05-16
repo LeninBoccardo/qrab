@@ -1,8 +1,10 @@
 //! Global hotkey registration.
 //!
-//! Default binding is `CmdOrCtrl+Shift+Q` — Tauri's `CmdOrCtrl` modifier
-//! resolves to Cmd on macOS and Ctrl elsewhere, matching the platform
-//! convention in CLAUDE.md §13.
+//! Default binding is platform-aware. On macOS we deliberately avoid
+//! `Cmd+Shift+Q` because that's the system Log Out shortcut — binding
+//! qrab there triggered both actions at once. Mac default is
+//! `Cmd+Shift+M` (matches the platform convention in CLAUDE.md §13).
+//! Windows / Linux keep `Ctrl+Shift+Q`.
 //!
 //! Registration is best-effort: on Wayland (and some restricted Linux
 //! sessions) global shortcuts may fail to register. We log and continue
@@ -15,7 +17,11 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 use crate::windows::RESULTS_WINDOW;
 
-pub const DEFAULT_HOTKEY: &str = "CmdOrCtrl+Shift+Q";
+#[cfg(target_os = "macos")]
+pub const DEFAULT_HOTKEY: &str = "Cmd+Shift+M";
+#[cfg(not(target_os = "macos"))]
+pub const DEFAULT_HOTKEY: &str = "Ctrl+Shift+Q";
+
 pub const SCAN_EVENT: &str = "qrab:scan";
 
 /// Register `hotkey` as the global scan shortcut. Any previously-registered
