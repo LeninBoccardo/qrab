@@ -89,6 +89,15 @@ export const BULK_OPEN_CONFIRM_THRESHOLD = 3;
 
 export type Theme = "system" | "light" | "dark";
 
+/** Static app metadata from Cargo — name, version, author, description.
+ *  Returned by `get_app_info`. Doesn't change at runtime. */
+export interface AppInfo {
+  name: string;
+  version: string;
+  author: string;
+  description: string;
+}
+
 /** Mirrors `Settings` in src-tauri/src/settings.rs (CLAUDE.md §9). */
 export interface Settings {
   hotkey: string;

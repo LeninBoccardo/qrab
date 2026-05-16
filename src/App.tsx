@@ -6,6 +6,7 @@ import {
   onMount,
   Switch,
 } from "solid-js";
+import { ConfigWindow } from "./windows/ConfigWindow";
 import { HistoryWindow } from "./windows/HistoryWindow";
 import { RegionSelectWindow } from "./windows/RegionSelectWindow";
 import { ResultsWindow } from "./windows/ResultsWindow";
@@ -39,6 +40,9 @@ const App: Component = () => {
       </Match>
       <Match when={route() === "settings"}>
         <SettingsWindow />
+      </Match>
+      <Match when={route() === "config"}>
+        <ConfigWindow />
       </Match>
     </Switch>
   );

@@ -29,11 +29,18 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
         true,
         None::<&str>,
     )?;
+    let config = MenuItem::with_id(
+        app,
+        "config",
+        "Config…",
+        true,
+        None::<&str>,
+    )?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&scan, &history, &settings, &separator, &quit],
+        &[&scan, &history, &settings, &config, &separator, &quit],
     )?;
 
     let icon = app
@@ -50,6 +57,7 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
             "scan" => crate::hotkey::trigger_scan(app),
             "history" => show_history(app),
             "settings" => show_settings(app),
+            "config" => show_config(app),
             "quit" => app.exit(0),
             _ => {}
         })
@@ -78,6 +86,11 @@ fn show_history<R: Runtime>(app: &AppHandle<R>) {
 /// Bring the results window forward and navigate it to `#settings`.
 fn show_settings<R: Runtime>(app: &AppHandle<R>) {
     navigate(app, "settings");
+}
+
+/// Bring the results window forward and navigate it to `#config`.
+fn show_config<R: Runtime>(app: &AppHandle<R>) {
+    navigate(app, "config");
 }
 
 fn navigate<R: Runtime>(app: &AppHandle<R>, route: &str) {

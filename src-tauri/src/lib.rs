@@ -17,10 +17,10 @@ pub mod windows;
 use capture::XcapCapturer;
 use commands::{
     consume_pending_scan, copy_row, copy_rows_as_json, copy_to_clipboard,
-    get_screenshot_monitor_png, get_screenshot_monitors, get_settings,
-    hide_results_window, history_clear, history_delete, history_query,
-    open_url, open_urls_bulk, scan_region, scan_screen, set_settings,
-    AppState,
+    get_app_info, get_screenshot_monitor_png, get_screenshot_monitors,
+    get_settings, hide_results_window, history_clear, history_delete,
+    history_query, open_url, open_urls_bulk, scan_region, scan_screen,
+    set_settings, AppState,
 };
 use decoder::RqrrDecoder;
 use screenshot::ScreenshotStore;
@@ -58,7 +58,8 @@ pub fn run() {
             get_screenshot_monitors,
             get_screenshot_monitor_png,
             get_settings,
-            set_settings
+            set_settings,
+            get_app_info
         ])
         .setup(|app| {
             log::info!("qrab starting (logs dir: {})", logging::logs_dir().display());

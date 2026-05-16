@@ -473,6 +473,27 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String
     Ok(state.settings.get())
 }
 
+/// Static app metadata sourced from Cargo at compile time — name,
+/// version, author, description. Used by the About section in #config.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfo {
+    pub name: &'static str,
+    pub version: &'static str,
+    pub author: &'static str,
+    pub description: &'static str,
+}
+
+#[tauri::command]
+pub async fn get_app_info() -> Result<AppInfo, String> {
+    Ok(AppInfo {
+        name: env!("CARGO_PKG_NAME"),
+        version: env!("CARGO_PKG_VERSION"),
+        author: env!("CARGO_PKG_AUTHORS"),
+        description: env!("CARGO_PKG_DESCRIPTION"),
+    })
+}
+
 /// Replace the user settings. Persists to disk and applies side effects:
 /// re-registers the global hotkey if it changed, and enables/disables the
 /// OS autostart entry if that toggle changed.

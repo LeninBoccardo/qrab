@@ -3,6 +3,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AppInfo,
   BulkOpenResult,
   HistoryFilter,
   RegionBounds,
@@ -84,6 +85,10 @@ export const getSettings = (): Promise<Settings> =>
 
 export const setSettings = (settings: Settings): Promise<void> =>
   invoke<void>("set_settings", { settings });
+
+/** Read-only app metadata from Cargo (name, version, author, description). */
+export const getAppInfo = (): Promise<AppInfo> =>
+  invoke<AppInfo>("get_app_info");
 
 /** Event name the Rust hotkey handler emits on press. */
 export const SCAN_EVENT = "qrab:scan";
