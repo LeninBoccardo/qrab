@@ -43,3 +43,22 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 [dev-dependencies]
 qrcode = { version = "0.14", default-features = false, features = ["image"] }
 
+# Release-profile tuning for the v1.0 binary (CLAUDE.md §2 target: < 18 MB).
+#
+# * lto = "fat"   — link-time optimization across the whole binary.
+# * codegen-units = 1  — slower build, smaller output; one compilation unit
+#                       gives the optimizer more to work with.
+# * strip = true   — drop debug symbols from the produced binary.
+# * opt-level = "s" — favor size over raw speed. rqrr / image still get
+#                     enough optimization (it's "s", not "z") that decode
+#                     stays fast.
+# * panic = "abort" — no unwinding tables in release. CLAUDE.md §15
+#                     forbids `unwrap()`/`expect()` in production paths,
+#                     so panics should never happen here in the first place.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+opt-level = "s"
+panic = "abort"
+
