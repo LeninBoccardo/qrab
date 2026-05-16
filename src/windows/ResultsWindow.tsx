@@ -8,7 +8,7 @@ import {
   Show,
 } from "solid-js";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { Crop, ExternalLink, ScanLine } from "lucide-solid";
+import { Crop, ExternalLink, History, ScanLine } from "lucide-solid";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { ResultCard } from "../components/ResultCard";
 import { EmptyState } from "../components/EmptyState";
@@ -220,7 +220,18 @@ export const ResultsWindow: Component = () => {
     <main class="flex h-full flex-col">
       <Titlebar onClose={() => void hideResultsWindow()} />
 
-      <div class="flex shrink-0 items-center justify-end gap-2 border-b border-neutral-200/60 px-3 py-1.5 dark:border-neutral-800/60">
+      <div class="flex shrink-0 items-center gap-2 border-b border-neutral-200/60 px-3 py-1.5 dark:border-neutral-800/60">
+        <Button
+          variant="ghost"
+          onClick={() => {
+            window.location.hash = "history";
+          }}
+          title="View scan history"
+        >
+          <History size={16} />
+          History
+        </Button>
+        <span class="flex-1" />
         <Show when={urlRowCount() > 0}>
           <Button
             variant="secondary"
