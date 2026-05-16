@@ -8,7 +8,7 @@ import {
   Show,
 } from "solid-js";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { Crop, ExternalLink, History, ScanLine } from "lucide-solid";
+import { Crop, ExternalLink, History, ScanLine, Settings } from "lucide-solid";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { ResultCard } from "../components/ResultCard";
 import { EmptyState } from "../components/EmptyState";
@@ -230,6 +230,16 @@ export const ResultsWindow: Component = () => {
         >
           <History size={16} />
           History
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            window.location.hash = "settings";
+          }}
+          title="Open settings"
+        >
+          <Settings size={16} />
+          Settings
         </Button>
         <span class="flex-1" />
         <Show when={urlRowCount() > 0}>

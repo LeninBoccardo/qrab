@@ -1,6 +1,8 @@
 import { Component, createSignal, onMount, Show } from "solid-js";
+import { ArrowLeft } from "lucide-solid";
 import { Titlebar } from "../components/Titlebar";
 import { HotkeyInput } from "../components/HotkeyInput";
+import { Button } from "../components/ui/Button";
 import * as Switch from "../components/ui/Switch";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { formatError } from "../lib/format";
@@ -36,6 +38,17 @@ export const SettingsWindow: Component = () => {
     <main class="flex h-full flex-col">
       <Titlebar
         title="qrab — settings"
+        actions={
+          <Button
+            variant="ghost"
+            onClick={() => {
+              window.location.hash = "results";
+            }}
+            title="Back to scan results"
+          >
+            <ArrowLeft size={14} /> Results
+          </Button>
+        }
         onClose={() => void hideResultsWindow()}
       />
 
