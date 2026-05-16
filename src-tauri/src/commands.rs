@@ -515,7 +515,11 @@ pub async fn open_screen_recording_prefs(
 /// still produces a scan.
 #[tauri::command]
 pub async fn consume_pending_scan(state: State<'_, AppState>) -> Result<bool, String> {
-    Ok(state.pending_scan.swap(false, Ordering::SeqCst))
+    let pending = state.pending_scan.swap(false, Ordering::SeqCst);
+    if pending {
+        log::info!("consume_pending_scan: returning true (frontend will scan)");
+    }
+    Ok(pending)
 }
 
 /// Return the current user settings.

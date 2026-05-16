@@ -63,6 +63,7 @@ pub fn register<R: Runtime>(app: &AppHandle<R>, hotkey: &str) -> bool {
 ///   2. A `qrab:scan` event emit. Catches the warm case where the listener
 ///      is alive and we want an immediate trigger without polling.
 pub fn trigger_scan<R: Runtime>(app: &AppHandle<R>) {
+    log::info!("trigger_scan: invoked");
     crate::windows::show_results_window(app);
 
     // Make sure the webview is on #results before we fire the scan signal.

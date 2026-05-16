@@ -34,6 +34,7 @@ import {
   scanScreen,
   SCAN_EVENT,
 } from "../lib/ipc";
+import { info as logInfo } from "../lib/log";
 import { planOpenAll } from "../lib/bulkOpen";
 import { formatError } from "../lib/format";
 import {
@@ -220,22 +221,45 @@ export const ResultsWindow: Component = () => {
   onMount(() => {
     window.addEventListener("keydown", onKeyDown);
 
-    let unlisten: UnlistenFn | null = null;
+    // `alive` closes the gap between unmount and these async Promises
+    // resolving. Without it, navigating away from #results before
+    // `listen(SCAN_EVENT)` resolved would leak the subscription — the
+    // cleanup ran with `unlisten` still null, then the Promise resolved
+    // and parked a now-orphan listener on the webview. The orphan
+    // closure kept its own `loading` reference, so the in-scope loading
+    // guard didn't prevent it from firing scan() the next time the user
+    // pressed the hotkey. That's the root of the intermittent
+    // "scan-on-route-change" symptom.
+    let alive = true;
+    let unlistenFn: UnlistenFn | null = null;
+
     void listen(SCAN_EVENT, () => {
+      void logInfo("scan(): triggered via SCAN_EVENT");
       void scan();
     }).then((fn) => {
-      unlisten = fn;
+      if (!alive) {
+        // Component unmounted while we were waiting for the listener to
+        // register. Tear it down immediately so it never fires.
+        fn();
+      } else {
+        unlistenFn = fn;
+      }
     });
 
-    // Pick up a hotkey/tray scan that fired before this listener attached
-    // (cold WebView2 path). The event path above handles the warm case.
+    // Cold-WebView2 path: hotkey fired before our SCAN_EVENT listener
+    // attached. consume_pending_scan atomically clears + returns the flag.
     void consumePendingScan().then((pending) => {
-      if (pending) void scan();
+      if (!alive) return;
+      if (pending) {
+        void logInfo("scan(): triggered via pending_scan flag");
+        void scan();
+      }
     });
 
     onCleanup(() => {
+      alive = false;
       window.removeEventListener("keydown", onKeyDown);
-      unlisten?.();
+      unlistenFn?.();
     });
   });
 
