@@ -6,3 +6,4 @@ dist
 
 # Runtime logs (one file per app start — see src-tauri/src/logging.rs)
 logs/
+prints/

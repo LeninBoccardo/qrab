@@ -91,6 +91,35 @@ pub fn run() {
             hotkey::register(app.handle(), &loaded_settings.hotkey);
             tray::install(app.handle())?;
 
+            // Size the window proportionally to the primary monitor (60%
+            // capped at 1200×800 logical) so the history table has room
+            // to breathe on big displays without dwarfing small ones.
+            // tauri.conf.json keeps a small default as the fallback when
+            // monitor enumeration fails.
+            if let Ok(Some(monitor)) = app.primary_monitor() {
+                if let Some(window) = app.get_webview_window(windows::RESULTS_WINDOW) {
+                    let scale = monitor.scale_factor();
+                    let logical_w = monitor.size().width as f64 / scale;
+                    let logical_h = monitor.size().height as f64 / scale;
+                    let target_w = (logical_w * 0.6).clamp(520.0, 1200.0);
+                    let target_h = (logical_h * 0.6).clamp(420.0, 800.0);
+                    if let Err(e) =
+                        window.set_size(tauri::LogicalSize::new(target_w, target_h))
+                    {
+                        log::warn!("could not resize results window: {e}");
+                    }
+                    let _ = window.center();
+                    log::info!(
+                        "results window sized to {:.0}x{:.0} (monitor {:.0}x{:.0} @ {}x)",
+                        target_w,
+                        target_h,
+                        logical_w,
+                        logical_h,
+                        scale
+                    );
+                }
+            }
+
             if let Some(window) = app.get_webview_window(windows::RESULTS_WINDOW) {
                 let to_hide = window.clone();
                 let screenshots_on_close = screenshots.clone();
