@@ -439,7 +439,7 @@ Feels like Raycast/Spotlight, not a dialog box.
 - Multiple results: vertically stacked cards, keyboard-navigable with arrow keys, Enter on focused card. Footer shows "Open all" and "Copy all" buttons.
 - Zero results: drops into region selector directly (the captured screenshot is shown with a rubber-band selector).
 - Subtle fade+scale animation on appear (~150ms). Nothing flashy.
-- Window: `decorations: false`, `transparent: true`, `alwaysOnTop: true`, `skipTaskbar: true`, ~520×420, resizable.
+- Window: `decorations: false`, `transparent: true`, `alwaysOnTop: false`, `skipTaskbar: true`, sized proportionally to the primary monitor on launch (~60% capped at 1200×800, floored at 520×420), resizable. The window stacks normally so the user can park it behind other apps; the tray icon brings it back forward.
 
 ### Region selector
 - Shows the screenshot at fit-to-window scale.

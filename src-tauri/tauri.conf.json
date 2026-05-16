@@ -21,7 +21,7 @@
         "minHeight": 240,
         "decorations": false,
         "transparent": true,
-        "alwaysOnTop": true,
+        "alwaysOnTop": false,
         "skipTaskbar": true,
         "resizable": true,
         "visible": false,
