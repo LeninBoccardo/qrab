@@ -1,10 +1,12 @@
 import { Component, createSignal } from "solid-js";
 import * as TextField from "./ui/TextField";
-import type { HistoryFilter, QrKind } from "../lib/types";
+import type { HistoryFilter, QrKind, StatusFilter } from "../lib/types";
 
 /** What the filter bar emits — limit/offset are owned by the parent. */
 export type FilterValue = Omit<HistoryFilter, "limit" | "offset">;
 
+/** Local 3-state for the C2 dropdown — C5 expands it to 4 states once
+ *  the Status column / copied filter ship. */
 type OpenedFilter = "all" | "opened" | "unopened";
 
 interface HistoryFiltersProps {
@@ -18,9 +20,9 @@ export const HistoryFilters: Component<HistoryFiltersProps> = (props) => {
     props.value.kind ?? "all",
   );
   const [opened, setOpened] = createSignal<OpenedFilter>(
-    props.value.openedOnly
+    props.value.status === "opened"
       ? "opened"
-      : props.value.unopenedOnly
+      : props.value.status === "untouched"
         ? "unopened"
         : "all",
   );
@@ -31,11 +33,16 @@ export const HistoryFilters: Component<HistoryFiltersProps> = (props) => {
   function emit(): void {
     if (debounceTimer !== undefined) window.clearTimeout(debounceTimer);
     debounceTimer = window.setTimeout(() => {
+      const status: StatusFilter | undefined =
+        opened() === "opened"
+          ? "opened"
+          : opened() === "unopened"
+            ? "untouched"
+            : undefined;
       const next: FilterValue = {
         search: search() || undefined,
         kind: kind() === "all" ? undefined : (kind() as QrKind),
-        openedOnly: opened() === "opened" ? true : undefined,
-        unopenedOnly: opened() === "unopened" ? true : undefined,
+        status,
       };
       props.onChange(next);
     }, 200);

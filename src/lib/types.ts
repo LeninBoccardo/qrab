@@ -22,7 +22,14 @@ export interface ScanRow {
   opened: boolean;
   /** Unix epoch milliseconds, or null if never opened. */
   openedAt: number | null;
+  copied: boolean;
+  /** Unix epoch milliseconds, or null if never copied. */
+  copiedAt: number | null;
 }
+
+/** Mirrors `StatusFilter` in src-tauri/src/storage/queries.rs.
+ *  `opened` and `copied` overlap; `untouched` is the AND-NOT case. */
+export type StatusFilter = "all" | "opened" | "copied" | "untouched";
 
 export interface ScanResult {
   rows: ScanRow[];
@@ -50,8 +57,8 @@ export interface ScreenshotMonitorMeta {
 export interface HistoryFilter {
   search?: string;
   kind?: QrKind;
-  openedOnly?: boolean;
-  unopenedOnly?: boolean;
+  /** Absent or `"all"` means no status narrowing. */
+  status?: StatusFilter;
   /** Unix epoch ms — inclusive lower bound on scannedAt. */
   from?: number;
   /** Unix epoch ms — inclusive upper bound on scannedAt. */

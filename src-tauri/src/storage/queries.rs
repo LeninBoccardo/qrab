@@ -20,6 +20,9 @@ pub struct ScanRow {
     pub opened: bool,
     /// Unix epoch milliseconds, or `None` if never opened.
     pub opened_at: Option<i64>,
+    pub copied: bool,
+    /// Unix epoch milliseconds, or `None` if never copied.
+    pub copied_at: Option<i64>,
 }
 
 impl ScanRow {
@@ -41,8 +44,22 @@ impl ScanRow {
             scanned_at: row.get("scanned_at")?,
             opened: row.get::<_, i64>("opened")? != 0,
             opened_at: row.get("opened_at")?,
+            copied: row.get::<_, i64>("copied")? != 0,
+            copied_at: row.get("copied_at")?,
         })
     }
+}
+
+/// Status filter for [`HistoryFilter`]. `Opened` and `Copied` overlap —
+/// a row that was both opened and copied counts for either filter.
+/// `Untouched` selects rows with neither flag set.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum StatusFilter {
+    All,
+    Opened,
+    Copied,
+    Untouched,
 }
 
 /// Fields needed to insert a new row — `id`, `opened`, and `opened_at`
@@ -88,7 +105,8 @@ pub fn insert_batch(
 pub fn get_by_id(storage: &Storage, id: i64) -> rusqlite::Result<Option<ScanRow>> {
     let conn = storage.lock();
     let mut stmt = conn.prepare(
-        "SELECT id, batch_id, content, kind, monitor_index, scanned_at, opened, opened_at
+        "SELECT id, batch_id, content, kind, monitor_index, scanned_at, \
+                opened, opened_at, copied, copied_at
          FROM scans WHERE id = ?1",
     )?;
     match stmt.query_row(params![id], ScanRow::from_db_row) {
@@ -104,8 +122,8 @@ pub fn get_by_id(storage: &Storage, id: i64) -> rusqlite::Result<Option<ScanRow>
 pub struct HistoryFilter {
     pub search: Option<String>,
     pub kind: Option<QrKind>,
-    pub opened_only: Option<bool>,
-    pub unopened_only: Option<bool>,
+    /// `None` is equivalent to [`StatusFilter::All`].
+    pub status: Option<StatusFilter>,
     pub from: Option<i64>,
     pub to: Option<i64>,
     pub limit: i64,
@@ -119,7 +137,8 @@ pub fn history_query(
     filter: &HistoryFilter,
 ) -> rusqlite::Result<Vec<ScanRow>> {
     let mut sql = String::from(
-        "SELECT id, batch_id, content, kind, monitor_index, scanned_at, opened, opened_at
+        "SELECT id, batch_id, content, kind, monitor_index, scanned_at, \
+                opened, opened_at, copied, copied_at
          FROM scans WHERE 1=1",
     );
     let mut bound: Vec<Box<dyn ToSql>> = Vec::new();
@@ -132,11 +151,13 @@ pub fn history_query(
         sql.push_str(" AND kind = ?");
         bound.push(Box::new(qrkind_to_str(k).to_string()));
     }
-    if filter.opened_only == Some(true) {
-        sql.push_str(" AND opened = 1");
-    }
-    if filter.unopened_only == Some(true) {
-        sql.push_str(" AND opened = 0");
+    match filter.status {
+        Some(StatusFilter::Opened) => sql.push_str(" AND opened = 1"),
+        Some(StatusFilter::Copied) => sql.push_str(" AND copied = 1"),
+        Some(StatusFilter::Untouched) => {
+            sql.push_str(" AND opened = 0 AND copied = 0")
+        }
+        Some(StatusFilter::All) | None => {}
     }
     if let Some(from) = filter.from {
         sql.push_str(" AND scanned_at >= ?");
@@ -171,6 +192,20 @@ pub fn mark_opened(
     let conn = storage.lock();
     conn.execute(
         "UPDATE scans SET opened = 1, opened_at = ?1 WHERE id = ?2",
+        params![now_ms, id],
+    )
+}
+
+/// Mark a row as copied, stamping `copied_at` to `now_ms` (Unix epoch ms).
+/// Returns the number of rows updated — `0` if the row doesn't exist.
+pub fn mark_copied(
+    storage: &Storage,
+    id: i64,
+    now_ms: i64,
+) -> rusqlite::Result<usize> {
+    let conn = storage.lock();
+    conn.execute(
+        "UPDATE scans SET copied = 1, copied_at = ?1 WHERE id = ?2",
         params![now_ms, id],
     )
 }
@@ -245,6 +280,8 @@ mod tests {
         assert_eq!(row.scanned_at, 1_234_567_890_000);
         assert!(!row.opened);
         assert_eq!(row.opened_at, None);
+        assert!(!row.copied);
+        assert_eq!(row.copied_at, None);
     }
 
     #[test]
@@ -324,8 +361,7 @@ mod tests {
         HistoryFilter {
             search: None,
             kind: None,
-            opened_only: None,
-            unopened_only: None,
+            status: None,
             from: None,
             to: None,
             limit,
@@ -435,24 +471,58 @@ mod tests {
     }
 
     #[test]
-    fn history_query_opened_only_and_unopened_only_split_correctly() {
+    fn history_query_status_filter_splits_opened_copied_untouched() {
         let storage = fresh();
         let ids = seed_history(&storage);
-        // Mark the first two as opened
-        mark_opened(&storage, ids[0], 500).expect("mark0");
-        mark_opened(&storage, ids[1], 600).expect("mark1");
+        // ids[0]: opened only, ids[1]: copied only, ids[2]: both,
+        // ids[3]: untouched
+        mark_opened(&storage, ids[0], 500).expect("mark0 opened");
+        mark_copied(&storage, ids[1], 510).expect("mark1 copied");
+        mark_opened(&storage, ids[2], 520).expect("mark2 opened");
+        mark_copied(&storage, ids[2], 530).expect("mark2 copied");
 
         let mut f = empty_filter(10);
-        f.opened_only = Some(true);
-        let opened = history_query(&storage, &f).expect("query");
+        f.status = Some(StatusFilter::Opened);
+        let opened = history_query(&storage, &f).expect("query opened");
         assert_eq!(opened.len(), 2);
         assert!(opened.iter().all(|r| r.opened));
 
         let mut f = empty_filter(10);
-        f.unopened_only = Some(true);
-        let unopened = history_query(&storage, &f).expect("query");
-        assert_eq!(unopened.len(), 2);
-        assert!(unopened.iter().all(|r| !r.opened));
+        f.status = Some(StatusFilter::Copied);
+        let copied = history_query(&storage, &f).expect("query copied");
+        assert_eq!(copied.len(), 2);
+        assert!(copied.iter().all(|r| r.copied));
+
+        let mut f = empty_filter(10);
+        f.status = Some(StatusFilter::Untouched);
+        let untouched = history_query(&storage, &f).expect("query untouched");
+        assert_eq!(untouched.len(), 1);
+        assert!(untouched.iter().all(|r| !r.opened && !r.copied));
+
+        let mut f = empty_filter(10);
+        f.status = Some(StatusFilter::All);
+        let all = history_query(&storage, &f).expect("query all");
+        assert_eq!(all.len(), 4);
+    }
+
+    #[test]
+    fn mark_copied_sets_copied_and_copied_at() {
+        let storage = fresh();
+        let ids = seed_history(&storage);
+        let updated = mark_copied(&storage, ids[0], 4321).expect("mark");
+        assert_eq!(updated, 1);
+        let row = get_by_id(&storage, ids[0]).expect("get").expect("some");
+        assert!(row.copied);
+        assert_eq!(row.copied_at, Some(4321));
+        // Opened state untouched.
+        assert!(!row.opened);
+    }
+
+    #[test]
+    fn mark_copied_missing_row_returns_zero() {
+        let storage = fresh();
+        let updated = mark_copied(&storage, 9999, 1).expect("mark");
+        assert_eq!(updated, 0);
     }
 
     #[test]

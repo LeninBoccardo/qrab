@@ -27,6 +27,13 @@ const MIGRATIONS: &[&str] = &[
     CREATE INDEX idx_scans_kind       ON scans(kind);
     CREATE INDEX idx_scans_opened     ON scans(opened);
     "#,
+    // v1 -> v2: track copied status so the History filter can show
+    // Opened / Copied / Untouched as separate states (CLAUDE.md §10).
+    r#"
+    ALTER TABLE scans ADD COLUMN copied    INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE scans ADD COLUMN copied_at INTEGER;
+    CREATE INDEX idx_scans_copied ON scans(copied);
+    "#,
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
@@ -87,7 +94,31 @@ mod tests {
         let mut conn = Connection::open_in_memory().expect("open");
         run_migrations(&mut conn).expect("migrate");
         let _ = conn
-            .prepare("SELECT id, batch_id, content, kind, monitor_index, scanned_at, opened, opened_at FROM scans")
+            .prepare(
+                "SELECT id, batch_id, content, kind, monitor_index, scanned_at, \
+                 opened, opened_at, copied, copied_at FROM scans",
+            )
             .expect("scans table queryable");
+    }
+
+    #[test]
+    fn migration_v2_adds_copied_columns_with_default_zero() {
+        let mut conn = Connection::open_in_memory().expect("open");
+        run_migrations(&mut conn).expect("migrate");
+        conn.execute(
+            "INSERT INTO scans (batch_id, content, kind, monitor_index, scanned_at) \
+             VALUES ('b', 'c', 'text', 0, 0)",
+            [],
+        )
+        .expect("insert");
+        let (copied, copied_at): (i64, Option<i64>) = conn
+            .query_row(
+                "SELECT copied, copied_at FROM scans LIMIT 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .expect("select copied columns");
+        assert_eq!(copied, 0);
+        assert_eq!(copied_at, None);
     }
 }

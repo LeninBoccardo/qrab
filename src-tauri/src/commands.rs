@@ -223,6 +223,8 @@ fn decode_region<D: Decoder + ?Sized>(
             scanned_at,
             opened: false,
             opened_at: None,
+            copied: false,
+            copied_at: None,
         });
     }
     Ok(rows)
@@ -522,6 +524,8 @@ fn decode_monitors<D: Decoder + ?Sized>(
                 scanned_at,
                 opened: false,
                 opened_at: None,
+                copied: false,
+                copied_at: None,
             });
         }
     }
@@ -607,6 +611,8 @@ mod tests {
         assert!(rows.iter().all(|r| r.scanned_at == 42));
         assert!(rows.iter().all(|r| !r.opened));
         assert!(rows.iter().all(|r| r.opened_at.is_none()));
+        assert!(rows.iter().all(|r| !r.copied));
+        assert!(rows.iter().all(|r| r.copied_at.is_none()));
     }
 
     fn bounds(x: u32, y: u32, w: u32, h: u32) -> RegionBounds {
