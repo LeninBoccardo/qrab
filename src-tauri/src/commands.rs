@@ -66,6 +66,7 @@ pub struct RegionBounds {
 /// the screenshot for region-select, and return the rows with real IDs.
 #[tauri::command]
 pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, String> {
+    log::info!("scan_screen: start");
     let capturer = state.capturer.clone();
     let decoder = state.decoder.clone();
     let storage = state.storage.clone();
@@ -75,11 +76,16 @@ pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, Strin
         tokio::task::spawn_blocking(move || capturer.capture_all())
             .await
             .map_err(|e| format!("capture task panicked: {e}"))?
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                log::warn!("scan_screen: capture failed: {e}");
+                e.to_string()
+            })?;
+    log::info!("scan_screen: captured {} monitor(s)", monitors.len());
 
     let scanned_at = current_epoch_ms();
     let screenshot_id = Ulid::new().to_string();
     let batch_id = Ulid::new().to_string();
+    let batch_log = batch_id.clone();
 
     // Decode + persist on the blocking pool — SQLite writes are sync and
     // were previously running on the async runtime, holding a worker for
@@ -101,6 +107,12 @@ pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, Strin
         Instant::now(),
     ));
 
+    log::info!(
+        "scan_screen: decoded {} code(s), batch={}, screenshot={}",
+        rows.len(),
+        batch_log,
+        screenshot_id
+    );
     Ok(ScanResult { rows, screenshot_id })
 }
 
@@ -116,6 +128,15 @@ pub async fn scan_region(
     screenshot_id: String,
     bounds: RegionBounds,
 ) -> Result<ScanResult, String> {
+    log::info!(
+        "scan_region: screenshot={} monitor={} bounds={}x{}+{}+{}",
+        screenshot_id,
+        bounds.monitor_index,
+        bounds.w,
+        bounds.h,
+        bounds.x,
+        bounds.y
+    );
     let held = state
         .screenshots
         .get_if_id(&screenshot_id)
@@ -124,6 +145,7 @@ pub async fn scan_region(
     let storage = state.storage.clone();
     let scanned_at = current_epoch_ms();
     let batch_id = Ulid::new().to_string();
+    let batch_log = batch_id.clone();
 
     // Crop + decode + persist all happen on the blocking pool so the
     // SQLite insert doesn't park the async runtime.
@@ -153,6 +175,7 @@ pub async fn scan_region(
     .await
     .map_err(|e| format!("region decode task panicked: {e}"))??;
 
+    log::info!("scan_region: decoded {} code(s), batch={}", rows.len(), batch_log);
     Ok(ScanResult { rows, screenshot_id })
 }
 
@@ -252,11 +275,13 @@ pub async fn copy_row(
         let row = get_by_id(&storage, id)
             .map_err(|e| format!("storage: {e}"))?
             .ok_or_else(|| format!("row {id} not found"))?;
+        let kind = row.kind;
         app.clipboard()
             .write_text(row.content)
             .map_err(|e| e.to_string())?;
         mark_copied_db(&storage, id, current_epoch_ms())
             .map_err(|e| format!("storage: {e}"))?;
+        log::info!("copy_row: id={id} kind={kind:?}");
         Ok(())
     })
     .await
@@ -324,6 +349,7 @@ pub async fn open_url(
             .map_err(|e| e.to_string())?;
         mark_opened_db(&storage, id, current_epoch_ms())
             .map_err(|e| format!("storage: {e}"))?;
+        log::info!("open_url: id={id}");
         Ok(())
     })
     .await
