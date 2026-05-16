@@ -1,5 +1,5 @@
 import { Component, createSignal, onMount, Show } from "solid-js";
-import { ExternalLink, Trash2 } from "lucide-solid";
+import { Copy, ExternalLink, Trash2 } from "lucide-solid";
 import { Titlebar } from "../components/Titlebar";
 import { HistoryFilters, type FilterValue } from "../components/HistoryFilters";
 import { HistoryTable } from "../components/HistoryTable";
@@ -9,6 +9,7 @@ import { Toaster, showToast } from "../components/ui/Toast";
 import { ConfirmOpenAll } from "../components/ConfirmOpenAll";
 import {
   copyRow as copyRowIpc,
+  copyRowsAsJson,
   hideResultsWindow,
   historyClear,
   historyDelete,
@@ -102,6 +103,26 @@ export const HistoryWindow: Component = () => {
       await load(true);
     } catch (err) {
       showToast(`Delete failed: ${formatError(err)}`);
+    }
+  }
+
+  async function copySelectedAsJson(): Promise<void> {
+    const ids = [...selected()];
+    if (ids.length === 0) return;
+    try {
+      const count = await copyRowsAsJson(ids);
+      const now = Date.now();
+      const idSet = new Set(ids);
+      setRows((prev) =>
+        prev.map((r) =>
+          idSet.has(r.id) ? { ...r, copied: true, copiedAt: now } : r,
+        ),
+      );
+      showToast(
+        `Copied ${count} ${count === 1 ? "row" : "rows"} as JSON`,
+      );
+    } catch (err) {
+      showToast(`Copy as JSON failed: ${formatError(err)}`);
     }
   }
 
@@ -236,6 +257,13 @@ export const HistoryWindow: Component = () => {
           <span class="flex-1" />
           <Button variant="ghost" onClick={clearSelection}>
             Clear
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void copySelectedAsJson()}
+            title="Copy the selected rows to the clipboard as JSON"
+          >
+            <Copy size={14} /> Copy as JSON
           </Button>
           <Button variant="secondary" onClick={() => void openSelected()}>
             <ExternalLink size={14} /> Open URLs
