@@ -106,12 +106,6 @@ export const SettingsWindow: Component = () => {
             </Row>
 
             <ToggleRow
-              label="Launch on login"
-              checked={s().autostart}
-              onChange={(v) => update("autostart", v)}
-            />
-
-            <ToggleRow
               label="Auto-copy when a scan finds one result"
               hint="Skip the click — drop the decoded text on the clipboard automatically."
               checked={s().autoCopyOnSingleResult}
