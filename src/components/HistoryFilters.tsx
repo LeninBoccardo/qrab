@@ -100,6 +100,7 @@ export const HistoryFilters: Component<HistoryFiltersProps> = (props) => {
                 <select
                     class="rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
                     value={status()}
+                    title="Filter by status"
                     onChange={(e) => {
                         setStatus(e.currentTarget.value as StatusFilter);
                         emit();
@@ -118,7 +119,8 @@ export const HistoryFilters: Component<HistoryFiltersProps> = (props) => {
                 </label>
                 <input
                     type="date"
-                    class="rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:[color-scheme:dark]"
+                    title="Filter from this date (inclusive)"
+                    class="rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:scheme-dark"
                     value={from()}
                     onChange={(e) => {
                         setFrom(e.currentTarget.value);
@@ -131,7 +133,8 @@ export const HistoryFilters: Component<HistoryFiltersProps> = (props) => {
                 <label class="text-xs font-medium text-neutral-600 dark:text-neutral-400">To</label>
                 <input
                     type="date"
-                    class="rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:[color-scheme:dark]"
+                    title="Filter up to this date (inclusive)"
+                    class="rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:scheme-dark"
                     value={to()}
                     onChange={(e) => {
                         setTo(e.currentTarget.value);
