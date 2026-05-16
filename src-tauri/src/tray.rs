@@ -60,7 +60,10 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
                 ..
             } = event
             {
-                crate::hotkey::trigger_scan(tray.app_handle());
+                // Left-click just surfaces the existing window — no scan.
+                // Explicit scans go through the "Scan now" menu entry or
+                // the global hotkey.
+                crate::windows::show_results_window(tray.app_handle());
             }
         })
         .build(app)?;
