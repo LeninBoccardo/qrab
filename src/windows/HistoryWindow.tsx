@@ -1,5 +1,5 @@
 import { Component, createSignal, onMount, Show } from "solid-js";
-import { Copy, ExternalLink, Trash2 } from "lucide-solid";
+import { ArrowLeft, Copy, ExternalLink, Trash2 } from "lucide-solid";
 import { Titlebar } from "../components/Titlebar";
 import { HistoryFilters, type FilterValue } from "../components/HistoryFilters";
 import { HistoryTable } from "../components/HistoryTable";
@@ -246,6 +246,17 @@ export const HistoryWindow: Component = () => {
     <main class="flex h-full flex-col">
       <Titlebar
         title="qrab — history"
+        actions={
+          <Button
+            variant="ghost"
+            onClick={() => {
+              window.location.hash = "results";
+            }}
+            title="Back to scan results"
+          >
+            <ArrowLeft size={14} /> Results
+          </Button>
+        }
         onClose={() => void hideResultsWindow()}
       />
 
