@@ -14,6 +14,16 @@ use tauri::{
 pub const TRAY_ID: &str = "qrab-tray";
 
 pub fn install<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
+    // Disabled label so users (and bug reports) can read the running
+    // build version straight from the tray without opening Config.
+    let version = MenuItem::with_id(
+        app,
+        "version",
+        format!("qrab v{}", env!("CARGO_PKG_VERSION")),
+        false,
+        None::<&str>,
+    )?;
+    let top_sep = PredefinedMenuItem::separator(app)?;
     let scan = MenuItem::with_id(app, "scan", "Scan now", true, None::<&str>)?;
     let history = MenuItem::with_id(
         app,
@@ -40,7 +50,10 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&scan, &history, &settings, &config, &separator, &quit],
+        &[
+            &version, &top_sep, &scan, &history, &settings, &config,
+            &separator, &quit,
+        ],
     )?;
 
     let icon = app
