@@ -13,6 +13,7 @@ import {
   Crop,
   ExternalLink,
   History,
+  Loader2,
   ScanLine,
   Settings,
   X,
@@ -317,7 +318,11 @@ export const ResultsWindow: Component = () => {
           Select region
         </Button>
         <Button variant="primary" onClick={scan} disabled={loading()}>
-          <ScanLine size={16} />
+          {loading() ? (
+            <Loader2 size={16} class="animate-spin" />
+          ) : (
+            <ScanLine size={16} />
+          )}
           {loading() ? "Scanning…" : "Scan now"}
         </Button>
       </div>

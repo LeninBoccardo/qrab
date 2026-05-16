@@ -5,7 +5,7 @@ import {
   onMount,
   Show,
 } from "solid-js";
-import { AlertTriangle, ArrowLeft, RotateCcw } from "lucide-solid";
+import { AlertTriangle, ArrowLeft, Loader2, RotateCcw } from "lucide-solid";
 import { Titlebar } from "../components/Titlebar";
 import { HotkeyInput } from "../components/HotkeyInput";
 import { Button } from "../components/ui/Button";
@@ -87,7 +87,8 @@ export const SettingsWindow: Component = () => {
       <Show
         when={settings()}
         fallback={
-          <div class="flex flex-1 items-center justify-center text-sm text-neutral-500">
+          <div class="flex flex-1 items-center justify-center gap-2 text-sm text-neutral-500">
+            <Loader2 size={14} class="animate-spin" />
             Loading…
           </div>
         }

@@ -5,7 +5,7 @@ import {
   onMount,
   Show,
 } from "solid-js";
-import { ArrowLeft } from "lucide-solid";
+import { ArrowLeft, Loader2 } from "lucide-solid";
 import { Titlebar } from "../components/Titlebar";
 import { Button } from "../components/ui/Button";
 import * as Switch from "../components/ui/Switch";
@@ -66,7 +66,10 @@ export const ConfigWindow: Component = () => {
           <Show
             when={info()}
             fallback={
-              <div class="text-sm text-neutral-500">Loading…</div>
+              <div class="inline-flex items-center gap-1.5 text-sm text-neutral-500">
+                <Loader2 size={14} class="animate-spin" />
+                Loading…
+              </div>
             }
           >
             {(i) => (
@@ -97,7 +100,10 @@ export const ConfigWindow: Component = () => {
           <Show
             when={settings()}
             fallback={
-              <div class="text-sm text-neutral-500">Loading…</div>
+              <div class="inline-flex items-center gap-1.5 text-sm text-neutral-500">
+                <Loader2 size={14} class="animate-spin" />
+                Loading…
+              </div>
             }
           >
             {(s) => (

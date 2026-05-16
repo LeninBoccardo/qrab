@@ -1,5 +1,5 @@
 import { Component, createSignal, onMount, Show } from "solid-js";
-import { ArrowLeft, Copy, ExternalLink, Trash2 } from "lucide-solid";
+import { ArrowLeft, Copy, ExternalLink, Loader2, Trash2 } from "lucide-solid";
 import { Titlebar } from "../components/Titlebar";
 import { HistoryFilters, type FilterValue } from "../components/HistoryFilters";
 import { HistoryTable } from "../components/HistoryTable";
@@ -307,7 +307,13 @@ export const HistoryWindow: Component = () => {
             onClick={() => void load(false)}
             disabled={loading()}
           >
-            {loading() ? "Loading…" : "Load more"}
+            {loading() ? (
+              <>
+                <Loader2 size={14} class="animate-spin" /> Loading…
+              </>
+            ) : (
+              "Load more"
+            )}
           </Button>
         </Show>
         <span>{rows().length} rows</span>

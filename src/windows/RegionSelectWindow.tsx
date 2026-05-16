@@ -9,6 +9,7 @@ import {
   onCleanup,
   Show,
 } from "solid-js";
+import { Loader2 } from "lucide-solid";
 import { Titlebar } from "../components/Titlebar";
 import { RegionSelector, type Bounds } from "../components/RegionSelector";
 import { Toaster, showToast } from "../components/ui/Toast";
@@ -138,7 +139,10 @@ export const RegionSelectWindow: Component = () => {
                   </span>
                 }
               >
-                <span>Loading screenshot…</span>
+                <span class="inline-flex items-center gap-1.5">
+                  <Loader2 size={14} class="animate-spin" />
+                  Loading screenshot…
+                </span>
               </Show>
             </div>
           }
