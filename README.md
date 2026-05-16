@@ -132,4 +132,4 @@ to open. Database lives entirely on your machine.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE) (if present).
+MIT — see [LICENSE](./LICENSE).
