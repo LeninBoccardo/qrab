@@ -121,6 +121,36 @@ pub fn sync_autostart<R: Runtime>(
     Ok(())
 }
 
+/// Reconcile the cached autostart preference with the actual OS state at
+/// startup. The user may have flipped the OS-level startup entry between
+/// runs (Task Manager / System Settings / .desktop edit); we trust the OS
+/// as the source of truth and update our stored setting to match, so the
+/// UI shows reality and `set_settings` doesn't silently re-enable an
+/// entry the user deliberately removed.
+///
+/// Returns `true` if `settings.autostart` was mutated.
+pub fn reconcile_autostart<R: Runtime>(
+    app: &AppHandle<R>,
+    settings: &mut Settings,
+) -> bool {
+    match app.autolaunch().is_enabled() {
+        Ok(actual) if actual != settings.autostart => {
+            log::info!(
+                "autostart drift detected (stored: {}, OS: {}); using OS state",
+                settings.autostart,
+                actual,
+            );
+            settings.autostart = actual;
+            true
+        }
+        Ok(_) => false,
+        Err(e) => {
+            log::warn!("autostart is_enabled check failed: {e}");
+            false
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

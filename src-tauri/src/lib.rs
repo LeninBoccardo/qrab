@@ -79,7 +79,18 @@ pub fn run() {
             let storage = Storage::open(app_data_dir.join("qrab.db"))
                 .map_err(|e| format!("opening qrab.db: {e}"))?;
 
-            let loaded_settings = settings::load_from_store(app.handle());
+            let mut loaded_settings = settings::load_from_store(app.handle());
+            // External-change detection: if the user disabled (or enabled)
+            // the OS startup entry outside the app, the cached preference
+            // is stale. Trust the OS, update the cache, write back so the
+            // next launch starts in sync.
+            if settings::reconcile_autostart(app.handle(), &mut loaded_settings) {
+                if let Err(e) =
+                    settings::save_to_store(app.handle(), &loaded_settings)
+                {
+                    log::warn!("failed to persist reconciled settings: {e}");
+                }
+            }
 
             let screenshots = ScreenshotStore::new();
             let state = AppState {
