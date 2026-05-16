@@ -95,5 +95,9 @@ export const getAppInfo = (): Promise<AppInfo> =>
 export const getHotkeyStatus = (): Promise<HotkeyStatus> =>
   invoke<HotkeyStatus>("get_hotkey_status");
 
+/** Open the macOS Screen Recording privacy pane. No-op elsewhere. */
+export const openScreenRecordingPrefs = (): Promise<void> =>
+  invoke<void>("open_screen_recording_prefs");
+
 /** Event name the Rust hotkey handler emits on press. */
 export const SCAN_EVENT = "qrab:scan";

@@ -8,7 +8,15 @@ import {
   Show,
 } from "solid-js";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { Crop, ExternalLink, History, ScanLine, Settings } from "lucide-solid";
+import {
+  AlertTriangle,
+  Crop,
+  ExternalLink,
+  History,
+  ScanLine,
+  Settings,
+  X,
+} from "lucide-solid";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { ResultCard } from "../components/ResultCard";
 import { EmptyState } from "../components/EmptyState";
@@ -19,6 +27,7 @@ import {
   consumePendingScan,
   copyRow as copyRowIpc,
   hideResultsWindow,
+  openScreenRecordingPrefs,
   openUrl,
   openUrlsBulk,
   scanScreen,
@@ -48,6 +57,11 @@ export const ResultsWindow: Component = () => {
   const [pendingUrlRows, setPendingUrlRows] = createSignal<ScanRow[]>([]);
   const [pendingSkipped, setPendingSkipped] = createSignal(0);
 
+  // Sticky banner shown when the OS denies screen recording access.
+  // Cleared automatically on the next successful scan.
+  const [permissionBlocked, setPermissionBlocked] = createSignal(false);
+  const isMac = (): boolean => /Mac/i.test(navigator.userAgent);
+
   async function scan(): Promise<void> {
     if (loading()) return;
     setLoading(true);
@@ -55,6 +69,7 @@ export const ResultsWindow: Component = () => {
       const r = await scanScreen();
       setScanResult(r);
       setFocusIdx(0);
+      setPermissionBlocked(false);
       // Zero results → push the user straight into the region selector
       // with the freshly held screenshot. Per CLAUDE.md §5 flow.
       if (r.rows.length === 0) {
@@ -70,7 +85,14 @@ export const ResultsWindow: Component = () => {
         await copyRow(r.rows[0]);
       }
     } catch (err) {
-      showToast(`Scan failed: ${formatError(err)}`);
+      const msg = formatError(err);
+      // CaptureError::PermissionDenied stringifies to this. Switch from
+      // ephemeral toast to a sticky banner with an actionable button.
+      if (/screen recording permission/i.test(msg)) {
+        setPermissionBlocked(true);
+      } else {
+        showToast(`Scan failed: ${msg}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -219,6 +241,39 @@ export const ResultsWindow: Component = () => {
   return (
     <main class="flex h-full flex-col">
       <Titlebar onClose={() => void hideResultsWindow()} />
+
+      <Show when={permissionBlocked()}>
+        <div class="flex items-center gap-2 border-b border-amber-700/50 bg-amber-100 px-3 py-2 text-xs dark:bg-amber-900/30">
+          <AlertTriangle
+            size={14}
+            class="shrink-0 text-amber-700 dark:text-amber-300"
+          />
+          <span class="flex-1 text-amber-900 dark:text-amber-100">
+            Screen Recording permission is required for qrab to see your
+            screen.
+            <Show when={isMac()}>
+              {" "}Open System Settings, enable qrab under Privacy &amp;
+              Security → Screen Recording, then quit and reopen qrab.
+            </Show>
+          </span>
+          <Show when={isMac()}>
+            <Button
+              variant="secondary"
+              onClick={() => void openScreenRecordingPrefs()}
+            >
+              Open Settings
+            </Button>
+          </Show>
+          <button
+            type="button"
+            class="grid h-5 w-5 place-items-center rounded text-amber-700 hover:bg-amber-200 dark:text-amber-300 dark:hover:bg-amber-900/50"
+            onClick={() => setPermissionBlocked(false)}
+            aria-label="Dismiss"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      </Show>
 
       <div class="flex shrink-0 items-center gap-2 border-b border-neutral-200/60 px-3 py-1.5 dark:border-neutral-800/60">
         <Button

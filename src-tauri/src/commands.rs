@@ -490,6 +490,26 @@ pub async fn hide_results_window(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Open the macOS Screen Recording privacy pane via the system URL
+/// scheme. No-op on Windows / Linux — those don't need a Screen Recording
+/// permission step. Bound to the actionable button on the results-window
+/// banner that appears when capture fails with PermissionDenied.
+#[tauri::command]
+pub async fn open_screen_recording_prefs(
+    #[allow(unused_variables)] app: AppHandle,
+) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        app.opener()
+            .open_url(
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+                None::<&str>,
+            )
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Atomically clear and return the pending-scan flag. The frontend calls
 /// this on mount so a hotkey that fired before the listener attached
 /// still produces a scan.
