@@ -123,6 +123,16 @@ pub fn run() {
                 }
             }
 
+            // In debug builds, surface the window on launch so dev iteration
+            // doesn't require clicking the tray after every reload. Release
+            // builds stay tray-only per the Raycast-style design (CLAUDE.md
+            // §5: "App starts hidden; tray icon only").
+            #[cfg(debug_assertions)]
+            if let Some(window) = app.get_webview_window(windows::RESULTS_WINDOW) {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+
             if let Some(window) = app.get_webview_window(windows::RESULTS_WINDOW) {
                 let to_hide = window.clone();
                 let screenshots_on_close = screenshots.clone();
