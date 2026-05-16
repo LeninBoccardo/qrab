@@ -31,6 +31,9 @@ export interface ScanRow {
  *  `opened` and `copied` overlap; `untouched` is the AND-NOT case. */
 export type StatusFilter = "all" | "opened" | "copied" | "untouched";
 
+/** Sort direction for history_query. Default is "desc" (newest first). */
+export type SortDir = "asc" | "desc";
+
 export interface ScanResult {
   rows: ScanRow[];
   /** Opaque handle echoed back to `scan_region`. */
@@ -63,6 +66,8 @@ export interface HistoryFilter {
   from?: number;
   /** Unix epoch ms — inclusive upper bound on scannedAt. */
   to?: number;
+  /** Absent defaults to "desc" (newest first). */
+  sortDir?: SortDir;
   limit: number;
   offset: number;
 }

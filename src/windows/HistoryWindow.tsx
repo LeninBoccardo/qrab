@@ -18,12 +18,13 @@ import {
 } from "../lib/ipc";
 import { planOpenAll } from "../lib/bulkOpen";
 import { formatError } from "../lib/format";
-import type { HistoryFilter, ScanRow } from "../lib/types";
+import type { HistoryFilter, ScanRow, SortDir } from "../lib/types";
 
 const PAGE_SIZE = 50;
 
 export const HistoryWindow: Component = () => {
   const [filter, setFilter] = createSignal<FilterValue>({});
+  const [sortDir, setSortDir] = createSignal<SortDir>("desc");
   const [rows, setRows] = createSignal<ScanRow[]>([]);
   const [offset, setOffset] = createSignal(0);
   const [hasMore, setHasMore] = createSignal(false);
@@ -41,6 +42,7 @@ export const HistoryWindow: Component = () => {
       const off = reset ? 0 : offset();
       const f: HistoryFilter = {
         ...filter(),
+        sortDir: sortDir(),
         limit: PAGE_SIZE,
         offset: off,
       };
@@ -62,6 +64,11 @@ export const HistoryWindow: Component = () => {
 
   function applyFilter(f: FilterValue): void {
     setFilter(f);
+    void load(true);
+  }
+
+  function toggleSort(): void {
+    setSortDir((d) => (d === "desc" ? "asc" : "desc"));
     void load(true);
   }
 
@@ -243,9 +250,11 @@ export const HistoryWindow: Component = () => {
         <HistoryTable
           rows={rows()}
           selected={selected()}
+          sortDir={sortDir()}
           onToggleSelect={toggleSelect}
           onSelectAll={selectAllVisible}
           onClearSelection={clearSelection}
+          onSortToggle={toggleSort}
           onCopy={(r) => void copyRow(r)}
           onOpen={(r) => void openRow(r)}
           onDelete={(id) => void deleteOne(id)}

@@ -1,16 +1,24 @@
 import { Component, createEffect, For, Show } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { Copy, ExternalLink, Trash2 } from "lucide-solid";
-import type { ScanRow } from "../lib/types";
+import {
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  ExternalLink,
+  Trash2,
+} from "lucide-solid";
+import type { ScanRow, SortDir } from "../lib/types";
 import { isOpenable, kindIcon, kindLabel } from "../lib/classify";
 import { absoluteTime, relativeTime } from "../lib/format";
 
 interface HistoryTableProps {
   rows: ScanRow[];
   selected: Set<number>;
+  sortDir: SortDir;
   onToggleSelect: (id: number) => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
+  onSortToggle: () => void;
   onCopy: (row: ScanRow) => void;
   onOpen: (row: ScanRow) => void;
   onDelete: (id: number) => void;
@@ -51,7 +59,26 @@ export const HistoryTable: Component<HistoryTableProps> = (props) => {
           </th>
           <th class="w-24 px-2 py-2">Kind</th>
           <th class="px-2 py-2">Content</th>
-          <th class="w-32 px-2 py-2">Scanned</th>
+          <th class="w-32 px-2 py-2">
+            <button
+              type="button"
+              class="inline-flex items-center gap-1 uppercase text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+              onClick={() => props.onSortToggle()}
+              aria-label={
+                props.sortDir === "asc"
+                  ? "Sort scanned descending"
+                  : "Sort scanned ascending"
+              }
+              title="Toggle scanned-date order"
+            >
+              Scanned
+              {props.sortDir === "asc" ? (
+                <ChevronUp size={12} />
+              ) : (
+                <ChevronDown size={12} />
+              )}
+            </button>
+          </th>
           <th class="w-20 px-2 py-2">Opened</th>
           <th class="w-32 px-2 py-2 text-right">Actions</th>
         </tr>

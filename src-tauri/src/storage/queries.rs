@@ -62,6 +62,24 @@ pub enum StatusFilter {
     Untouched,
 }
 
+/// Sort direction for [`history_query`]. Defaults to `Desc` (newest first).
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SortDir {
+    #[default]
+    Desc,
+    Asc,
+}
+
+impl SortDir {
+    fn as_sql(self) -> &'static str {
+        match self {
+            SortDir::Desc => "DESC",
+            SortDir::Asc => "ASC",
+        }
+    }
+}
+
 /// Fields needed to insert a new row — `id`, `opened`, and `opened_at`
 /// are filled in by the DB (PK / defaults).
 pub struct NewScanRow<'a> {
@@ -126,6 +144,8 @@ pub struct HistoryFilter {
     pub status: Option<StatusFilter>,
     pub from: Option<i64>,
     pub to: Option<i64>,
+    /// `None` is equivalent to [`SortDir::Desc`] (newest first).
+    pub sort_dir: Option<SortDir>,
     pub limit: i64,
     pub offset: i64,
 }
@@ -167,7 +187,12 @@ pub fn history_query(
         sql.push_str(" AND scanned_at <= ?");
         bound.push(Box::new(to));
     }
-    sql.push_str(" ORDER BY scanned_at DESC, id DESC LIMIT ? OFFSET ?");
+    // SortDir variants resolve to literal SQL keywords, so format!-ing
+    // them in is safe (no user-controlled SQL).
+    let dir = filter.sort_dir.unwrap_or_default().as_sql();
+    sql.push_str(&format!(
+        " ORDER BY scanned_at {dir}, id {dir} LIMIT ? OFFSET ?"
+    ));
     bound.push(Box::new(filter.limit.max(0)));
     bound.push(Box::new(filter.offset.max(0)));
 
@@ -364,6 +389,7 @@ mod tests {
             status: None,
             from: None,
             to: None,
+            sort_dir: None,
             limit,
             offset: 0,
         }
@@ -418,6 +444,17 @@ mod tests {
                 "https://alpha.test",     // 100
             ],
         );
+    }
+
+    #[test]
+    fn history_query_ascending_sort_reverses_order() {
+        let storage = fresh();
+        seed_history(&storage);
+        let mut f = empty_filter(10);
+        f.sort_dir = Some(SortDir::Asc);
+        let rows = history_query(&storage, &f).expect("query");
+        let scans: Vec<i64> = rows.iter().map(|r| r.scanned_at).collect();
+        assert_eq!(scans, vec![100, 200, 300, 400], "ascending should be oldest first");
     }
 
     #[test]
