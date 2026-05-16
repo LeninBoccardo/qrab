@@ -87,6 +87,11 @@ export const getSettings = (): Promise<Settings> =>
 export const setSettings = (settings: Settings): Promise<void> =>
   invoke<void>("set_settings", { settings });
 
+/** Returns the canonical defaults — used by the Reset action in Settings
+ *  so Rust stays the source of truth (platform-aware hotkey, etc.). */
+export const getDefaultSettings = (): Promise<Settings> =>
+  invoke<Settings>("get_default_settings");
+
 /** Read-only app metadata from Cargo (name, version, author, description). */
 export const getAppInfo = (): Promise<AppInfo> =>
   invoke<AppInfo>("get_app_info");

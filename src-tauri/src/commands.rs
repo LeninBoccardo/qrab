@@ -524,6 +524,14 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String
     Ok(state.settings.get())
 }
 
+/// Return a fresh `Settings::default()`. Lets the frontend offer a
+/// "Reset to defaults" action without hardcoding the defaults — Rust
+/// stays the source of truth, including the platform-aware hotkey.
+#[tauri::command]
+pub async fn get_default_settings() -> Result<Settings, String> {
+    Ok(Settings::default())
+}
+
 /// Current hotkey binding + whether the OS accepted its registration.
 /// Surfaced in the Settings UI so the user sees a visible warning when
 /// the chord could not be bound (Wayland, conflict, invalid combo).

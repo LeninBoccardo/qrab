@@ -5,25 +5,46 @@ import {
   onMount,
   Show,
 } from "solid-js";
-import { AlertTriangle, ArrowLeft } from "lucide-solid";
+import { AlertTriangle, ArrowLeft, RotateCcw } from "lucide-solid";
 import { Titlebar } from "../components/Titlebar";
 import { HotkeyInput } from "../components/HotkeyInput";
 import { Button } from "../components/ui/Button";
+import * as Dialog from "../components/ui/Dialog";
 import * as Switch from "../components/ui/Switch";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { formatError } from "../lib/format";
-import { getHotkeyStatus, hideResultsWindow } from "../lib/ipc";
+import {
+  getDefaultSettings,
+  getHotkeyStatus,
+  hideResultsWindow,
+} from "../lib/ipc";
 import { loadSettings, saveSettings, settings } from "../lib/state";
 import type { Settings, Theme } from "../lib/types";
 
 export const SettingsWindow: Component = () => {
   const [saving, setSaving] = createSignal(false);
+  const [resetOpen, setResetOpen] = createSignal(false);
   const [hotkeyStatus, { refetch: refetchHotkey }] =
     createResource(getHotkeyStatus);
 
   onMount(() => {
     if (!settings()) void loadSettings();
   });
+
+  async function confirmReset(): Promise<void> {
+    setResetOpen(false);
+    setSaving(true);
+    try {
+      const defaults = await getDefaultSettings();
+      await saveSettings(defaults);
+      refetchHotkey();
+      showToast("Settings reset to defaults");
+    } catch (err) {
+      showToast(`Reset failed: ${formatError(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function save(next: Settings): Promise<void> {
     setSaving(true);
@@ -127,9 +148,40 @@ export const SettingsWindow: Component = () => {
             <Show when={saving()}>
               <div class="text-xs text-neutral-500">Saving…</div>
             </Show>
+
+            <div class="mt-auto flex justify-end border-t border-neutral-200/60 pt-4 dark:border-neutral-800/60">
+              <Button
+                variant="ghost"
+                onClick={() => setResetOpen(true)}
+                title="Restore all settings to their default values"
+              >
+                <RotateCcw size={14} /> Reset to defaults
+              </Button>
+            </div>
           </div>
         )}
       </Show>
+
+      <Dialog.Root open={resetOpen()} onOpenChange={setResetOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay />
+          <Dialog.Content class="w-[420px]">
+            <Dialog.Title>Reset all settings?</Dialog.Title>
+            <Dialog.Description>
+              This restores hotkey, theme, autostart and the behavior
+              toggles to their defaults. Scan history is not affected.
+            </Dialog.Description>
+            <div class="mt-5 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setResetOpen(false)}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={() => void confirmReset()}>
+                Reset
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <Toaster />
     </main>
