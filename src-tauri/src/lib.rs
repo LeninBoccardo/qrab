@@ -33,6 +33,17 @@ const SCREENSHOT_GC_INTERVAL: Duration = Duration::from_secs(10);
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // single-instance plugin MUST be the first plugin registered:
+        // it short-circuits the second process before any other plugin
+        // touches state (tray icon, hotkey, SQLite WAL handles).
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            log::info!("second instance attempted; surfacing existing window");
+            if let Some(window) = app.get_webview_window(windows::RESULTS_WINDOW) {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(logging::build_plugin())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
