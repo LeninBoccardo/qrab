@@ -16,19 +16,30 @@ This project is also a **portfolio piece**. Code quality, commit hygiene, README
 
 ---
 
-## 1.5. Current state (as of 2026-05-14)
+## 1.5. Current state (as of 2026-05-15)
 
-**Phase 0 — fresh `create-tauri-app` scaffold.** Only the boilerplate `greet` command exists in `src-tauri/src/lib.rs`; `src/App.tsx` is the template demo. None of the QR-related modules (capture, decoder, storage, tray, hotkey, settings, windows) exist yet. Next step: Phase 1 from §14.
+**v1.0 feature-complete, robustness pass applied.** All five phases from §14 shipped, post-ship audit (perf / bugs / dead-code / security) addressed, plus a second robustness wave (single-instance, hotkey-status surfaced, macOS permission helper, window-state persistence, scan-flow logging, frontend Vitest setup). Awaiting v1.0 tag pending the in-flight app icon work.
 
-What's already in place:
-- Tauri 2, Solid, TypeScript, Vite scaffolding from `create-tauri-app`.
-- `@kobalte/core`, `lucide-solid`, `tailwindcss` v4 + `@tailwindcss/vite` installed.
-- `tauri-plugin-opener` wired up; no other Tauri plugins yet.
+What's shipped end-to-end:
+- Capture (`xcap`) + decode (`rqrr`) with the `Capturer` / `Decoder` trait seams from §4.
+- All IPC commands in §8 plus: `copy_row`, `copy_rows_as_json`, `get_app_info`, `get_hotkey_status`, `open_screen_recording_prefs`, `consume_pending_scan`, `get_screenshot_monitors`, `get_screenshot_monitor_png`, `get_default_settings`. `mark_opened` was deleted as dead code (open_url marks internally).
+- SQLite WAL + schema v2 with `copied`/`copied_at` (v1 docs in §7) and full filter/sort plumbing (`status` enum, `sort_dir` enum, from/to date range).
+- Hash routes: `#results`, `#region`, `#history`, `#settings`, `#config`. Each non-Results route has a back button.
+- Tray menu: Scan now, View history, Settings…, Config…, Quit. Left-click surfaces the window without scanning.
+- Tauri plugins: opener, clipboard-manager, global-shortcut, log, store, autostart, single-instance, window-state.
+- Per-launch file logging (`<repo>/logs/qrab-<timestamp>.log`) covering setup, scan/copy/open flow, error paths, and autostart drift detection.
+- Window: proportional sizing on first launch, then `tauri-plugin-window-state` restores user's size/position.
+- Autostart with OS-truth reconcile (external disabling wins).
+- 48 Rust unit + 4 Rust integration + 17 TS unit tests, all green.
 
-What's planned but not installed:
-- All Rust crates listed in §3 except `tauri`, `tauri-plugin-opener`, `serde`, `serde_json` will be added as their phase begins. The §3 list is aspirational, not preinstalled.
-- `@kobalte/tailwindcss` (used in §11) — install when starting Phase 1 UI.
-- Scripts in §12 beyond `dev`/`build`/`tauri`/`start`/`serve` — `package.json` currently has none of the format/lint/test scripts. Run them directly via `cargo` / `npx` until added.
+Tested on: Windows 11 (development host). macOS and Linux paths exist via Tauri abstractions but are not runtime-verified in this branch — see README.
+
+Deferred to v1.1 (Phase 6):
+- App icon polish (in progress).
+- CI matrix (GitHub Actions).
+- Code signing (Windows EV, macOS notarization).
+- README screenshots once icon set lands.
+- `v1.0` git tag.
 
 ---
 
