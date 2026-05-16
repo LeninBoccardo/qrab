@@ -1,10 +1,11 @@
 import { Component, createSignal, onMount, Show } from "solid-js";
-import { ArrowLeft, Copy, ExternalLink, Loader2, Trash2 } from "lucide-solid";
+import { ArrowLeft, Loader2, Trash2 } from "lucide-solid";
 import { Titlebar } from "../components/Titlebar";
 import { HistoryFilters, type FilterValue } from "../components/HistoryFilters";
 import { HistoryTable } from "../components/HistoryTable";
+import { HistorySelectionBar } from "../components/HistorySelectionBar";
+import { ClearHistoryDialog } from "../components/ClearHistoryDialog";
 import { Button } from "../components/ui/Button";
-import * as Dialog from "../components/ui/Dialog";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { ConfirmOpenAll } from "../components/ConfirmOpenAll";
 import {
@@ -263,26 +264,13 @@ export const HistoryWindow: Component = () => {
       <HistoryFilters value={filter()} onChange={applyFilter} />
 
       <Show when={selected().size > 0}>
-        <div class="flex items-center gap-2 border-b border-blue-700/40 bg-blue-900/20 px-3 py-1.5 text-xs">
-          <span class="text-blue-100">{selected().size} selected</span>
-          <span class="flex-1" />
-          <Button variant="ghost" onClick={clearSelection}>
-            Clear
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => void copySelectedAsJson()}
-            title="Copy the selected rows to the clipboard as JSON"
-          >
-            <Copy size={14} /> Copy as JSON
-          </Button>
-          <Button variant="secondary" onClick={() => void openSelected()}>
-            <ExternalLink size={14} /> Open URLs
-          </Button>
-          <Button variant="primary" onClick={() => void deleteSelected()}>
-            <Trash2 size={14} /> Delete selected
-          </Button>
-        </div>
+        <HistorySelectionBar
+          count={selected().size}
+          onClear={clearSelection}
+          onCopyAsJson={() => void copySelectedAsJson()}
+          onOpenUrls={() => void openSelected()}
+          onDelete={() => void deleteSelected()}
+        />
       </Show>
 
       <div class="min-h-0 flex-1 overflow-auto">
@@ -322,35 +310,11 @@ export const HistoryWindow: Component = () => {
         </Button>
       </div>
 
-      <Dialog.Root
+      <ClearHistoryDialog
         open={clearConfirm()}
         onOpenChange={setClearConfirm}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay />
-          <Dialog.Content class="w-[420px]">
-            <Dialog.Title>Clear all history?</Dialog.Title>
-            <Dialog.Description>
-              This permanently deletes every row from the database. There's
-              no undo.
-            </Dialog.Description>
-            <div class="mt-5 flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => setClearConfirm(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => void confirmClearAll()}
-              >
-                Delete all
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+        onConfirm={() => void confirmClearAll()}
+      />
 
       <ConfirmOpenAll
         open={confirmOpen()}
