@@ -54,6 +54,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             scan_screen,
             scan_region,
@@ -126,33 +127,43 @@ pub fn run() {
             hotkey_registered.store(ok, std::sync::atomic::Ordering::SeqCst);
             tray::install(app.handle())?;
 
-            // Size the window proportionally to the primary monitor (60%
-            // capped at 1200×800 logical) so the history table has room
-            // to breathe on big displays without dwarfing small ones.
-            // tauri.conf.json keeps a small default as the fallback when
-            // monitor enumeration fails.
-            if let Ok(Some(monitor)) = app.primary_monitor() {
-                if let Some(window) = app.get_webview_window(windows::RESULTS_WINDOW) {
-                    let scale = monitor.scale_factor();
-                    let logical_w = monitor.size().width as f64 / scale;
-                    let logical_h = monitor.size().height as f64 / scale;
-                    let target_w = (logical_w * 0.6).clamp(520.0, 1200.0);
-                    let target_h = (logical_h * 0.6).clamp(420.0, 800.0);
-                    if let Err(e) =
-                        window.set_size(tauri::LogicalSize::new(target_w, target_h))
-                    {
-                        log::warn!("could not resize results window: {e}");
+            // First-launch proportional sizing: 60% of the primary monitor,
+            // capped at 1200×800 logical, floored at the conf default.
+            // tauri-plugin-window-state handles every subsequent launch by
+            // restoring the size/position the user last left the window at,
+            // so a `.window-sized-once` marker is dropped after the initial
+            // size so we don't fight the plugin's restoration on later runs.
+            let size_marker = app_data_dir.join(".window-sized-once");
+            let first_size = !size_marker.exists();
+            if first_size {
+                if let Ok(Some(monitor)) = app.primary_monitor() {
+                    if let Some(window) = app.get_webview_window(windows::RESULTS_WINDOW) {
+                        let scale = monitor.scale_factor();
+                        let logical_w = monitor.size().width as f64 / scale;
+                        let logical_h = monitor.size().height as f64 / scale;
+                        let target_w = (logical_w * 0.6).clamp(520.0, 1200.0);
+                        let target_h = (logical_h * 0.6).clamp(420.0, 800.0);
+                        if let Err(e) =
+                            window.set_size(tauri::LogicalSize::new(target_w, target_h))
+                        {
+                            log::warn!("could not resize results window: {e}");
+                        }
+                        let _ = window.center();
+                        log::info!(
+                            "first-launch window sized to {:.0}x{:.0} (monitor {:.0}x{:.0} @ {}x)",
+                            target_w,
+                            target_h,
+                            logical_w,
+                            logical_h,
+                            scale
+                        );
                     }
-                    let _ = window.center();
-                    log::info!(
-                        "results window sized to {:.0}x{:.0} (monitor {:.0}x{:.0} @ {}x)",
-                        target_w,
-                        target_h,
-                        logical_w,
-                        logical_h,
-                        scale
-                    );
                 }
+                if let Err(e) = std::fs::write(&size_marker, "") {
+                    log::warn!("could not write window-size marker: {e}");
+                }
+            } else {
+                log::info!("window size restored from tauri-plugin-window-state");
             }
 
             // In debug builds, surface the window on launch so dev iteration
