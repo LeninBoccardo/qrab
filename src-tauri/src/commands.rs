@@ -42,6 +42,11 @@ pub struct AppState {
     /// `tauri-plugin-store`; hotkey + autostart side effects applied on
     /// `set_settings`.
     pub settings: SettingsStore,
+    /// Outcome of the most recent `hotkey::register` call. `false` means
+    /// the OS rejected the binding (Wayland restriction, conflict with
+    /// another app, or invalid accelerator). Read by the Settings UI to
+    /// surface a visible warning to the user.
+    pub hotkey_registered: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -499,6 +504,26 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String
     Ok(state.settings.get())
 }
 
+/// Current hotkey binding + whether the OS accepted its registration.
+/// Surfaced in the Settings UI so the user sees a visible warning when
+/// the chord could not be bound (Wayland, conflict, invalid combo).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HotkeyStatus {
+    pub binding: String,
+    pub registered: bool,
+}
+
+#[tauri::command]
+pub async fn get_hotkey_status(
+    state: State<'_, AppState>,
+) -> Result<HotkeyStatus, String> {
+    Ok(HotkeyStatus {
+        binding: state.settings.get().hotkey,
+        registered: state.hotkey_registered.load(Ordering::SeqCst),
+    })
+}
+
 /// Static app metadata sourced from Cargo at compile time — name,
 /// version, author, description. Used by the About section in #config.
 #[derive(Debug, Clone, Serialize)]
@@ -543,8 +568,9 @@ pub async fn set_settings(
 
     if prev.hotkey != settings.hotkey {
         // Failure here is non-fatal — settings still saved, user sees the
-        // warning in logs and can rebind to a working combo.
-        crate::hotkey::register(&app, &settings.hotkey);
+        // warning in logs and the Settings UI flag from hotkey_registered.
+        let ok = crate::hotkey::register(&app, &settings.hotkey);
+        state.hotkey_registered.store(ok, Ordering::SeqCst);
     }
 
     if prev.autostart != settings.autostart {

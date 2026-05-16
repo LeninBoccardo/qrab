@@ -17,10 +17,10 @@ pub mod windows;
 use capture::XcapCapturer;
 use commands::{
     consume_pending_scan, copy_row, copy_rows_as_json, copy_to_clipboard,
-    get_app_info, get_screenshot_monitor_png, get_screenshot_monitors,
-    get_settings, hide_results_window, history_clear, history_delete,
-    history_query, open_url, open_urls_bulk, scan_region, scan_screen,
-    set_settings, AppState,
+    get_app_info, get_hotkey_status, get_screenshot_monitor_png,
+    get_screenshot_monitors, get_settings, hide_results_window,
+    history_clear, history_delete, history_query, open_url, open_urls_bulk,
+    scan_region, scan_screen, set_settings, AppState,
 };
 use decoder::RqrrDecoder;
 use screenshot::ScreenshotStore;
@@ -70,7 +70,8 @@ pub fn run() {
             get_screenshot_monitor_png,
             get_settings,
             set_settings,
-            get_app_info
+            get_app_info,
+            get_hotkey_status
         ])
         .setup(|app| {
             log::info!("qrab starting (logs dir: {})", logging::logs_dir().display());
@@ -104,6 +105,10 @@ pub fn run() {
             }
 
             let screenshots = ScreenshotStore::new();
+            // Pessimistic default — flips to true if the register call
+            // below succeeds. Lets the Settings UI surface a warning if
+            // we can't bind the hotkey at startup.
+            let hotkey_registered = Arc::new(AtomicBool::new(false));
             let state = AppState {
                 capturer: Arc::new(XcapCapturer::new()),
                 decoder: Arc::new(RqrrDecoder::new()),
@@ -111,10 +116,12 @@ pub fn run() {
                 storage,
                 pending_scan: Arc::new(AtomicBool::new(false)),
                 settings: SettingsStore::new(loaded_settings.clone()),
+                hotkey_registered: hotkey_registered.clone(),
             };
             app.manage(state);
 
-            hotkey::register(app.handle(), &loaded_settings.hotkey);
+            let ok = hotkey::register(app.handle(), &loaded_settings.hotkey);
+            hotkey_registered.store(ok, std::sync::atomic::Ordering::SeqCst);
             tray::install(app.handle())?;
 
             // Size the window proportionally to the primary monitor (60%

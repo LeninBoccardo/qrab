@@ -6,6 +6,7 @@ import type {
   AppInfo,
   BulkOpenResult,
   HistoryFilter,
+  HotkeyStatus,
   RegionBounds,
   ScanResult,
   ScanRow,
@@ -89,6 +90,10 @@ export const setSettings = (settings: Settings): Promise<void> =>
 /** Read-only app metadata from Cargo (name, version, author, description). */
 export const getAppInfo = (): Promise<AppInfo> =>
   invoke<AppInfo>("get_app_info");
+
+/** Current hotkey binding plus whether the OS accepted its registration. */
+export const getHotkeyStatus = (): Promise<HotkeyStatus> =>
+  invoke<HotkeyStatus>("get_hotkey_status");
 
 /** Event name the Rust hotkey handler emits on press. */
 export const SCAN_EVENT = "qrab:scan";

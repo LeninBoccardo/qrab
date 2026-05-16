@@ -98,6 +98,14 @@ export interface AppInfo {
   description: string;
 }
 
+/** Whether the OS accepted the current hotkey binding. `registered: false`
+ *  means the chord could not be bound — usually a conflict with another
+ *  app or a platform restriction (Wayland). */
+export interface HotkeyStatus {
+  binding: string;
+  registered: boolean;
+}
+
 /** Mirrors `Settings` in src-tauri/src/settings.rs (CLAUDE.md §9). */
 export interface Settings {
   hotkey: string;

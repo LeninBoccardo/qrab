@@ -1,17 +1,25 @@
-import { Component, createSignal, onMount, Show } from "solid-js";
-import { ArrowLeft } from "lucide-solid";
+import {
+  Component,
+  createResource,
+  createSignal,
+  onMount,
+  Show,
+} from "solid-js";
+import { AlertTriangle, ArrowLeft } from "lucide-solid";
 import { Titlebar } from "../components/Titlebar";
 import { HotkeyInput } from "../components/HotkeyInput";
 import { Button } from "../components/ui/Button";
 import * as Switch from "../components/ui/Switch";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { formatError } from "../lib/format";
-import { hideResultsWindow } from "../lib/ipc";
+import { getHotkeyStatus, hideResultsWindow } from "../lib/ipc";
 import { loadSettings, saveSettings, settings } from "../lib/state";
 import type { Settings, Theme } from "../lib/types";
 
 export const SettingsWindow: Component = () => {
   const [saving, setSaving] = createSignal(false);
+  const [hotkeyStatus, { refetch: refetchHotkey }] =
+    createResource(getHotkeyStatus);
 
   onMount(() => {
     if (!settings()) void loadSettings();
@@ -21,6 +29,9 @@ export const SettingsWindow: Component = () => {
     setSaving(true);
     try {
       await saveSettings(next);
+      // Re-query so the warning flips off when a previously-bad chord
+      // is replaced with one the OS accepts (or on for the reverse).
+      refetchHotkey();
     } catch (err) {
       showToast(`Save failed: ${formatError(err)}`);
     } finally {
@@ -63,10 +74,21 @@ export const SettingsWindow: Component = () => {
         {(s) => (
           <div class="flex flex-1 flex-col gap-5 overflow-auto p-5">
             <Row label="Hotkey" hint="Global shortcut to capture and decode.">
-              <HotkeyInput
-                value={s().hotkey}
-                onChange={(v) => update("hotkey", v)}
-              />
+              <div class="flex flex-col items-end gap-1">
+                <HotkeyInput
+                  value={s().hotkey}
+                  onChange={(v) => update("hotkey", v)}
+                />
+                <Show when={hotkeyStatus()?.registered === false}>
+                  <span
+                    class="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400"
+                    title="Another app may already own this combination, or the OS does not allow it as a global shortcut."
+                  >
+                    <AlertTriangle size={12} />
+                    Not registered — try another combination
+                  </span>
+                </Show>
+              </div>
             </Row>
 
             <Row label="Theme">
