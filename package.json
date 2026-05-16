@@ -13,6 +13,8 @@
     "fmt": "prettier --write \"src/**/*.{ts,tsx,css,html,json}\"",
     "fmt:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml",
     "clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml"
   },
   "license": "MIT",
@@ -31,9 +33,12 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
     "@tauri-apps/cli": "^2",
+    "@vitest/coverage-v8": "^4.1.6",
+    "jsdom": "^29.1.1",
     "postcss": "^8.5.14",
     "typescript": "~5.6.2",
     "vite": "^6.0.3",
-    "vite-plugin-solid": "^2.11.0"
+    "vite-plugin-solid": "^2.11.0",
+    "vitest": "^4.1.6"
   }
 }

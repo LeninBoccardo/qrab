@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 import tailwindcss from "@tailwindcss/vite";
@@ -29,5 +30,14 @@ export default defineConfig(async () => ({
             // 3. tell Vite to ignore watching `src-tauri`
             ignored: ["**/src-tauri/**"],
         },
+    },
+
+    // Vitest config — pure-function tests live alongside source as
+    // *.test.ts. jsdom environment lets format helpers that touch
+    // Date/Intl work without surprises; we don't render Solid components
+    // yet (that would need @solidjs/testing-library).
+    test: {
+        environment: "jsdom",
+        include: ["src/**/*.test.{ts,tsx}"],
     },
 }));
