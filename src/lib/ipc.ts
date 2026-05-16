@@ -24,6 +24,16 @@ export const scanRegion = (
 export const copyToClipboard = (text: string): Promise<void> =>
   invoke<void>("copy_to_clipboard", { text });
 
+/** Copy a stored row's content to the clipboard and stamp `copied_at` on
+ *  the row. Atomic on the Rust side. */
+export const copyRow = (id: number): Promise<void> =>
+  invoke<void>("copy_row", { id });
+
+/** Bulk: serialize the rows as JSON, copy once, mark all as copied.
+ *  Returns the count of rows written. */
+export const copyRowsAsJson = (ids: number[]): Promise<number> =>
+  invoke<number>("copy_rows_as_json", { ids });
+
 /** Open the row's URL in the user's browser and stamp `opened_at`. */
 export const openUrl = (id: number): Promise<void> =>
   invoke<void>("open_url", { id });

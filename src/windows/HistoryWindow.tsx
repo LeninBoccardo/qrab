@@ -8,7 +8,7 @@ import * as Dialog from "../components/ui/Dialog";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { ConfirmOpenAll } from "../components/ConfirmOpenAll";
 import {
-  copyToClipboard,
+  copyRow as copyRowIpc,
   hideResultsWindow,
   historyClear,
   historyDelete,
@@ -114,7 +114,13 @@ export const HistoryWindow: Component = () => {
 
   async function copyRow(row: ScanRow): Promise<void> {
     try {
-      await copyToClipboard(row.content);
+      await copyRowIpc(row.id);
+      const now = Date.now();
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === row.id ? { ...r, copied: true, copiedAt: now } : r,
+        ),
+      );
       showToast("Copied to clipboard");
     } catch (err) {
       showToast(`Copy failed: ${formatError(err)}`);

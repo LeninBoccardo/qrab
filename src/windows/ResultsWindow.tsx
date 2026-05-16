@@ -17,7 +17,7 @@ import { Button } from "../components/ui/Button";
 import { ConfirmOpenAll } from "../components/ConfirmOpenAll";
 import {
   consumePendingScan,
-  copyToClipboard,
+  copyRow as copyRowIpc,
   hideResultsWindow,
   openUrl,
   openUrlsBulk,
@@ -85,7 +85,19 @@ export const ResultsWindow: Component = () => {
 
   async function copyRow(row: ScanRow): Promise<void> {
     try {
-      await copyToClipboard(row.content);
+      await copyRowIpc(row.id);
+      // Reflect the new copied_at locally so the Status column updates
+      // without a re-query.
+      const r = scanResult();
+      if (r) {
+        const now = Date.now();
+        setScanResult({
+          ...r,
+          rows: r.rows.map((x) =>
+            x.id === row.id ? { ...x, copied: true, copiedAt: now } : x,
+          ),
+        });
+      }
       showToast("Copied to clipboard");
       if (settings()?.closeAfterCopy) {
         await hideResultsWindow();

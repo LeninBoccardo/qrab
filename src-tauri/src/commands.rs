@@ -12,8 +12,8 @@ use crate::screenshot::{HeldScreenshot, ScreenshotStore};
 use crate::settings::{Settings, SettingsStore};
 use crate::storage::queries::{
     delete_all, delete_by_id, get_by_id, history_query as history_query_db,
-    insert_batch, mark_opened as mark_opened_db, HistoryFilter, NewScanRow,
-    ScanRow,
+    insert_batch, mark_copied as mark_copied_db,
+    mark_opened as mark_opened_db, HistoryFilter, NewScanRow, ScanRow,
 };
 use crate::storage::Storage;
 use serde::{Deserialize, Serialize};
@@ -230,10 +230,76 @@ fn decode_region<D: Decoder + ?Sized>(
     Ok(rows)
 }
 
-/// Write `text` to the system clipboard.
+/// Write `text` to the system clipboard. Generic helper for callers that
+/// don't have a row id — row-based copy paths use [`copy_row`] instead so
+/// the row gets stamped as copied atomically.
 #[tauri::command]
 pub async fn copy_to_clipboard(app: AppHandle, text: String) -> Result<(), String> {
     app.clipboard().write_text(text).map_err(|e| e.to_string())
+}
+
+/// Copy a stored row's content to the clipboard and stamp the row as
+/// copied. Atomic on the Rust side so the frontend never has to glue a
+/// `copy_to_clipboard` + `mark_copied` pair (which could race).
+#[tauri::command]
+pub async fn copy_row(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<(), String> {
+    let storage = state.storage.clone();
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let row = get_by_id(&storage, id)
+            .map_err(|e| format!("storage: {e}"))?
+            .ok_or_else(|| format!("row {id} not found"))?;
+        app.clipboard()
+            .write_text(row.content)
+            .map_err(|e| e.to_string())?;
+        mark_copied_db(&storage, id, current_epoch_ms())
+            .map_err(|e| format!("storage: {e}"))?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("copy task panicked: {e}"))?
+}
+
+/// Bulk copy: serialize `ids` rows to JSON, write the JSON once to the
+/// clipboard, and stamp every row as copied. Returns the number of rows
+/// successfully copied. Bulk-action surface for the History window
+/// (CLAUDE.md §10 "copy as JSON").
+#[tauri::command]
+pub async fn copy_rows_as_json(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<usize, String> {
+    let storage = state.storage.clone();
+    tokio::task::spawn_blocking(move || -> Result<usize, String> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let mut rows: Vec<ScanRow> = Vec::with_capacity(ids.len());
+        for id in &ids {
+            let row = get_by_id(&storage, *id)
+                .map_err(|e| format!("storage: {e}"))?
+                .ok_or_else(|| format!("row {id} not found"))?;
+            rows.push(row);
+        }
+        let json = serde_json::to_string_pretty(&rows)
+            .map_err(|e| format!("serialize: {e}"))?;
+        app.clipboard()
+            .write_text(json)
+            .map_err(|e| e.to_string())?;
+        let now_ms = current_epoch_ms();
+        for id in &ids {
+            if let Err(e) = mark_copied_db(&storage, *id, now_ms) {
+                log::warn!("mark_copied failed for {id}: {e}");
+            }
+        }
+        Ok(ids.len())
+    })
+    .await
+    .map_err(|e| format!("copy task panicked: {e}"))?
 }
 
 /// Open a stored row's URL in the user's default browser and mark the
