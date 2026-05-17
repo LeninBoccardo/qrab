@@ -20,6 +20,8 @@
  *   trim       true | false (default true except when transparent="none")
  *   trimThreshold  trim sensitivity (default 10)
  *   padding    transparent px added back after trim (default 0)
+ *   targetSize NxN resize fit:"contain" with transparent padding. Used
+ *              when the consumer (e.g. tauri-icon CLI) requires square.
  */
 
 import { mkdirSync, readFileSync } from "node:fs";
@@ -159,6 +161,18 @@ async function extractOne(entry, outPath) {
       bottom: padding,
       left: padding,
       right: padding,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    });
+  }
+
+  // Step 5: optional resize-to-square with transparent letterbox. fit:
+  // "contain" keeps aspect ratio and pads the shorter side. tauri-icon
+  // requires a square source; this is how we hand it one.
+  if (entry.targetSize) {
+    pipeline = pipeline.resize({
+      width: entry.targetSize,
+      height: entry.targetSize,
+      fit: "contain",
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     });
   }

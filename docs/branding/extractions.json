@@ -25,7 +25,8 @@
       "name": "app-icon",
       "crop": { "left": 730, "top": 70, "width": 280, "height": 210 },
       "transparent": "lighten",
-      "padding": 20
+      "padding": 20,
+      "targetSize": 1024
     },
     {
       "name": "tray-icon",
