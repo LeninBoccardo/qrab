@@ -699,7 +699,13 @@ pub async fn get_screenshot_monitor_png(
 /// Decode every monitor image and build `ScanRow`s, deduping identical
 /// content across monitors (first-monitor-wins per CLAUDE.md §9).
 ///
-/// Pure and generic over `Decoder` so tests can pass a fake.
+/// Per-monitor decode time is logged at INFO so users (and us) can see
+/// whether decode is the dominant cost on a given setup — the answer
+/// drives whether downsampling/parallelism is worth pursuing later.
+///
+/// Pure-ish: generic over `Decoder` so tests can pass a fake. The only
+/// non-purity is the timing log, which is fine in tests (the logger is
+/// uninitialized there and the call is a no-op).
 fn decode_monitors<D: Decoder + ?Sized>(
     decoder: &D,
     monitors: &[MonitorImage],
@@ -709,7 +715,19 @@ fn decode_monitors<D: Decoder + ?Sized>(
     let mut seen: HashSet<String> = HashSet::new();
     let mut rows = Vec::new();
     for m in monitors {
-        for content in decoder.decode(&m.image) {
+        let (w, h) = m.image.dimensions();
+        let started = Instant::now();
+        let decoded = decoder.decode(&m.image);
+        let elapsed = started.elapsed();
+        log::info!(
+            "decode: monitor={} {}x{} found={} took={}ms",
+            m.index,
+            w,
+            h,
+            decoded.len(),
+            elapsed.as_millis()
+        );
+        for content in decoded {
             if !seen.insert(content.clone()) {
                 continue;
             }
