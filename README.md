@@ -1,3 +1,7 @@
+<p align="left">
+  <img src="docs/branding/extracted/primary-logo.png" alt="qrab" height="80" />
+</p>
+
 # qrab
 
 A lightweight desktop utility that captures QR codes visible anywhere on your
