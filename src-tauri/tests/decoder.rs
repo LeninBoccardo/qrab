@@ -53,8 +53,7 @@ fn decodes_two_codes_in_one_image() {
     let h = ah.max(bh);
     let gap = 40u32;
     let total_w = aw + gap + bw;
-    let mut canvas =
-        image::RgbaImage::from_pixel(total_w, h, Rgba([255, 255, 255, 255]));
+    let mut canvas = image::RgbaImage::from_pixel(total_w, h, Rgba([255, 255, 255, 255]));
     image::imageops::overlay(&mut canvas, &a, 0, 0);
     image::imageops::overlay(&mut canvas, &b, (aw + gap) as i64, 0);
 

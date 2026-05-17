@@ -12,10 +12,9 @@ use crate::screenshot::{HeldScreenshot, ScreenshotStore};
 use crate::settings::{Settings, SettingsStore};
 use crate::storage::queries::{
     delete_all, delete_by_id, delete_by_ids, get_by_id, get_by_ids,
-    history_query as history_query_db, insert_batch,
-    mark_copied as mark_copied_db, mark_copied_many,
-    mark_opened as mark_opened_db, mark_opened_many, HistoryFilter,
-    NewScanRow, ScanRow,
+    history_query as history_query_db, insert_batch, mark_copied as mark_copied_db,
+    mark_copied_many, mark_opened as mark_opened_db, mark_opened_many, HistoryFilter, NewScanRow,
+    ScanRow,
 };
 use crate::storage::Storage;
 use serde::{Deserialize, Serialize};
@@ -79,14 +78,13 @@ pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, Strin
     let storage = state.storage.clone();
     let store = state.screenshots.clone();
 
-    let monitors: Vec<MonitorImage> =
-        tokio::task::spawn_blocking(move || capturer.capture_all())
-            .await
-            .map_err(|e| format!("capture task panicked: {e}"))?
-            .map_err(|e| {
-                log::warn!("scan_screen: capture failed: {e}");
-                e.to_string()
-            })?;
+    let monitors: Vec<MonitorImage> = tokio::task::spawn_blocking(move || capturer.capture_all())
+        .await
+        .map_err(|e| format!("capture task panicked: {e}"))?
+        .map_err(|e| {
+            log::warn!("scan_screen: capture failed: {e}");
+            e.to_string()
+        })?;
     log::info!("scan_screen: captured {} monitor(s)", monitors.len());
 
     let scanned_at = current_epoch_ms();
@@ -98,15 +96,15 @@ pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, Strin
     // were previously running on the async runtime, holding a worker for
     // the duration of the transaction. Returning `monitors` from the
     // closure lets us still feed them to the screenshot store afterward.
-    let (rows, monitors) =
-        tokio::task::spawn_blocking(move || -> Result<(Vec<ScanRow>, Vec<MonitorImage>), String> {
-            let mut rows =
-                decode_monitors(decoder.as_ref(), &monitors, &batch_id, scanned_at);
+    let (rows, monitors) = tokio::task::spawn_blocking(
+        move || -> Result<(Vec<ScanRow>, Vec<MonitorImage>), String> {
+            let mut rows = decode_monitors(decoder.as_ref(), &monitors, &batch_id, scanned_at);
             persist_rows(&storage, &mut rows)?;
             Ok((rows, monitors))
-        })
-        .await
-        .map_err(|e| format!("decode task panicked: {e}"))??;
+        },
+    )
+    .await
+    .map_err(|e| format!("decode task panicked: {e}"))??;
 
     store.put(HeldScreenshot::new(
         screenshot_id.clone(),
@@ -120,7 +118,10 @@ pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, Strin
         batch_log,
         screenshot_id
     );
-    Ok(ScanResult { rows, screenshot_id })
+    Ok(ScanResult {
+        rows,
+        screenshot_id,
+    })
 }
 
 /// Decode a sub-rectangle of a previously-held screenshot.
@@ -156,17 +157,14 @@ pub async fn scan_region(
 
     // Crop + decode + persist all happen on the blocking pool so the
     // SQLite insert doesn't park the async runtime.
-    let rows: Vec<ScanRow> = tokio::task::spawn_blocking(
-        move || -> Result<Vec<ScanRow>, String> {
+    let rows: Vec<ScanRow> =
+        tokio::task::spawn_blocking(move || -> Result<Vec<ScanRow>, String> {
             let monitor = held
                 .monitors
                 .iter()
                 .find(|m| m.index == bounds.monitor_index)
                 .ok_or_else(|| {
-                    format!(
-                        "monitor index {} not in screenshot",
-                        bounds.monitor_index
-                    )
+                    format!("monitor index {} not in screenshot", bounds.monitor_index)
                 })?;
             let mut rows = decode_region(
                 decoder.as_ref(),
@@ -177,13 +175,19 @@ pub async fn scan_region(
             )?;
             persist_rows(&storage, &mut rows)?;
             Ok(rows)
-        },
-    )
-    .await
-    .map_err(|e| format!("region decode task panicked: {e}"))??;
+        })
+        .await
+        .map_err(|e| format!("region decode task panicked: {e}"))??;
 
-    log::info!("scan_region: decoded {} code(s), batch={}", rows.len(), batch_log);
-    Ok(ScanResult { rows, screenshot_id })
+    log::info!(
+        "scan_region: decoded {} code(s), batch={}",
+        rows.len(),
+        batch_log
+    );
+    Ok(ScanResult {
+        rows,
+        screenshot_id,
+    })
 }
 
 /// Insert any rows where `id == -1` (i.e. freshly decoded) and overwrite
@@ -202,8 +206,7 @@ fn persist_rows(storage: &Storage, rows: &mut [ScanRow]) -> Result<(), String> {
             scanned_at: r.scanned_at,
         })
         .collect();
-    let ids =
-        insert_batch(storage, &new_rows).map_err(|e| format!("storage: {e}"))?;
+    let ids = insert_batch(storage, &new_rows).map_err(|e| format!("storage: {e}"))?;
     for (row, id) in rows.iter_mut().zip(ids.iter()) {
         row.id = *id;
     }
@@ -224,18 +227,14 @@ fn decode_region<D: Decoder + ?Sized>(
         return Err("region must have non-zero width and height".into());
     }
     let (img_w, img_h) = image.dimensions();
-    if bounds.x.saturating_add(bounds.w) > img_w
-        || bounds.y.saturating_add(bounds.h) > img_h
-    {
+    if bounds.x.saturating_add(bounds.w) > img_w || bounds.y.saturating_add(bounds.h) > img_h {
         return Err(format!(
             "bounds out of image (image {img_w}x{img_h}, region {}+{}, {}+{})",
             bounds.x, bounds.w, bounds.y, bounds.h
         ));
     }
 
-    let crop =
-        image::imageops::crop_imm(image, bounds.x, bounds.y, bounds.w, bounds.h)
-            .to_image();
+    let crop = image::imageops::crop_imm(image, bounds.x, bounds.y, bounds.w, bounds.h).to_image();
 
     let mut seen: HashSet<String> = HashSet::new();
     let mut rows = Vec::new();
@@ -272,11 +271,7 @@ pub async fn copy_to_clipboard(app: AppHandle, text: String) -> Result<(), Strin
 /// copied. Atomic on the Rust side so the frontend never has to glue a
 /// `copy_to_clipboard` + `mark_copied` pair (which could race).
 #[tauri::command]
-pub async fn copy_row(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: i64,
-) -> Result<(), String> {
+pub async fn copy_row(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<(), String> {
     let storage = state.storage.clone();
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         let row = get_by_id(&storage, id)
@@ -286,8 +281,7 @@ pub async fn copy_row(
         app.clipboard()
             .write_text(row.content)
             .map_err(|e| e.to_string())?;
-        mark_copied_db(&storage, id, current_epoch_ms())
-            .map_err(|e| format!("storage: {e}"))?;
+        mark_copied_db(&storage, id, current_epoch_ms()).map_err(|e| format!("storage: {e}"))?;
         log::info!("copy_row: id={id} kind={kind:?}");
         Ok(())
     })
@@ -310,8 +304,7 @@ pub async fn copy_rows_as_json(
         if ids.is_empty() {
             return Ok(0);
         }
-        let rows =
-            get_by_ids(&storage, &ids).map_err(|e| format!("storage: {e}"))?;
+        let rows = get_by_ids(&storage, &ids).map_err(|e| format!("storage: {e}"))?;
         if rows.len() != ids.len() {
             // Surface the first missing id so the UI can show a useful error
             // — happens if rows were deleted between selection and copy.
@@ -321,8 +314,7 @@ pub async fn copy_rows_as_json(
                 return Err(format!("row {id} not found"));
             }
         }
-        let json = serde_json::to_string_pretty(&rows)
-            .map_err(|e| format!("serialize: {e}"))?;
+        let json = serde_json::to_string_pretty(&rows).map_err(|e| format!("serialize: {e}"))?;
         app.clipboard()
             .write_text(json)
             .map_err(|e| e.to_string())?;
@@ -339,11 +331,7 @@ pub async fn copy_rows_as_json(
 /// row as opened. The frontend passes the row id rather than the URL so
 /// the open-and-mark pair is atomic on the Rust side.
 #[tauri::command]
-pub async fn open_url(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    id: i64,
-) -> Result<(), String> {
+pub async fn open_url(app: AppHandle, state: State<'_, AppState>, id: i64) -> Result<(), String> {
     let storage = state.storage.clone();
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         let row = get_by_id(&storage, id)
@@ -355,8 +343,7 @@ pub async fn open_url(
         app.opener()
             .open_url(&row.content, None::<&str>)
             .map_err(|e| e.to_string())?;
-        mark_opened_db(&storage, id, current_epoch_ms())
-            .map_err(|e| format!("storage: {e}"))?;
+        mark_opened_db(&storage, id, current_epoch_ms()).map_err(|e| format!("storage: {e}"))?;
         log::info!("open_url: id={id}");
         Ok(())
     })
@@ -379,10 +366,7 @@ pub async fn history_query(
 
 /// Delete one row from history.
 #[tauri::command]
-pub async fn history_delete(
-    state: State<'_, AppState>,
-    id: i64,
-) -> Result<(), String> {
+pub async fn history_delete(state: State<'_, AppState>, id: i64) -> Result<(), String> {
     let storage = state.storage.clone();
     tokio::task::spawn_blocking(move || delete_by_id(&storage, id))
         .await
@@ -460,8 +444,7 @@ pub async fn open_urls_bulk(
     tokio::task::spawn_blocking(move || -> Result<BulkOpenResult, String> {
         // Resolve rows up front so the count check uses URLs only — non-URL
         // rows in the selection don't tab-bomb the threshold.
-        let rows =
-            get_by_ids(&storage, &ids).map_err(|e| format!("storage: {e}"))?;
+        let rows = get_by_ids(&storage, &ids).map_err(|e| format!("storage: {e}"))?;
         if rows.len() != ids.len() {
             let found: HashSet<i64> = rows.iter().map(|r| r.id).collect();
             let missing = ids.iter().find(|id| !found.contains(id));
@@ -493,19 +476,24 @@ pub async fn open_urls_bulk(
         for (id, url) in url_rows {
             match opener.open_url(&url, None::<&str>) {
                 Ok(()) => opened.push(id),
-                Err(e) => failed.push(BulkOpenFailure { id, error: e.to_string() }),
+                Err(e) => failed.push(BulkOpenFailure {
+                    id,
+                    error: e.to_string(),
+                }),
             }
         }
 
         if !opened.is_empty() {
-            if let Err(e) =
-                mark_opened_many(&storage, &opened, current_epoch_ms())
-            {
+            if let Err(e) = mark_opened_many(&storage, &opened, current_epoch_ms()) {
                 log::warn!("mark_opened_many failed: {e}");
             }
         }
 
-        Ok(BulkOpenResult { opened, failed, skipped_non_url })
+        Ok(BulkOpenResult {
+            opened,
+            failed,
+            skipped_non_url,
+        })
     })
     .await
     .map_err(|e| format!("open task panicked: {e}"))?
@@ -575,9 +563,7 @@ pub struct HotkeyStatus {
 }
 
 #[tauri::command]
-pub async fn get_hotkey_status(
-    state: State<'_, AppState>,
-) -> Result<HotkeyStatus, String> {
+pub async fn get_hotkey_status(state: State<'_, AppState>) -> Result<HotkeyStatus, String> {
     Ok(HotkeyStatus {
         binding: state.settings.get().hotkey,
         registered: state.hotkey_registered.load(Ordering::SeqCst),
@@ -666,7 +652,11 @@ pub async fn get_screenshot_monitors(
         .iter()
         .map(|m| {
             let (w, h) = m.image.dimensions();
-            ScreenshotMonitorMeta { index: m.index, width: w, height: h }
+            ScreenshotMonitorMeta {
+                index: m.index,
+                width: w,
+                height: h,
+            }
         })
         .collect())
 }
@@ -770,7 +760,10 @@ mod tests {
 
     impl FakeDecoder {
         fn new(per_call: Vec<Vec<String>>) -> Self {
-            Self { per_call, idx: AtomicUsize::new(0) }
+            Self {
+                per_call,
+                idx: AtomicUsize::new(0),
+            }
         }
     }
 
@@ -782,7 +775,10 @@ mod tests {
     }
 
     fn monitor(index: usize) -> MonitorImage {
-        MonitorImage { index, image: RgbaImage::new(1, 1) }
+        MonitorImage {
+            index,
+            image: RgbaImage::new(1, 1),
+        }
     }
 
     #[test]
@@ -791,12 +787,7 @@ mod tests {
             vec!["https://example.com".into()],
             vec!["https://example.com".into(), "other".into()],
         ]);
-        let rows = decode_monitors(
-            &decoder,
-            &[monitor(0), monitor(1)],
-            "batch-1",
-            1000,
-        );
+        let rows = decode_monitors(&decoder, &[monitor(0), monitor(1)], "batch-1", 1000);
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].content, "https://example.com");
         assert_eq!(rows[0].monitor_index, 0, "first monitor wins on dedup");
@@ -833,18 +824,22 @@ mod tests {
     }
 
     fn bounds(x: u32, y: u32, w: u32, h: u32) -> RegionBounds {
-        RegionBounds { x, y, w, h, monitor_index: 0 }
+        RegionBounds {
+            x,
+            y,
+            w,
+            h,
+            monitor_index: 0,
+        }
     }
 
     #[test]
     fn decode_region_rejects_zero_size() {
         let decoder = FakeDecoder::new(vec![]);
         let img = RgbaImage::new(100, 100);
-        let err =
-            decode_region(&decoder, &img, &bounds(0, 0, 0, 10), "b", 0).unwrap_err();
+        let err = decode_region(&decoder, &img, &bounds(0, 0, 0, 10), "b", 0).unwrap_err();
         assert!(err.contains("non-zero"));
-        let err =
-            decode_region(&decoder, &img, &bounds(0, 0, 10, 0), "b", 0).unwrap_err();
+        let err = decode_region(&decoder, &img, &bounds(0, 0, 10, 0), "b", 0).unwrap_err();
         assert!(err.contains("non-zero"));
     }
 
@@ -852,8 +847,7 @@ mod tests {
     fn decode_region_rejects_out_of_bounds() {
         let decoder = FakeDecoder::new(vec![]);
         let img = RgbaImage::new(100, 100);
-        let err = decode_region(&decoder, &img, &bounds(50, 50, 60, 60), "b", 0)
-            .unwrap_err();
+        let err = decode_region(&decoder, &img, &bounds(50, 50, 60, 60), "b", 0).unwrap_err();
         assert!(err.contains("out of image"));
     }
 
@@ -865,9 +859,7 @@ mod tests {
             "other".into(),
         ]]);
         let img = RgbaImage::new(100, 100);
-        let rows =
-            decode_region(&decoder, &img, &bounds(10, 10, 20, 20), "b-1", 7)
-                .unwrap();
+        let rows = decode_region(&decoder, &img, &bounds(10, 10, 20, 20), "b-1", 7).unwrap();
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].content, "https://example.com");
         assert_eq!(rows[1].content, "other");
@@ -892,15 +884,20 @@ mod tests {
 
         // Place the QR at (50, 60) on a 600x500 canvas filled with noise-free
         // white so anything OUTSIDE the bounds wouldn't decode.
-        let mut canvas =
-            image::RgbaImage::from_pixel(600, 500, Rgba([255, 255, 255, 255]));
+        let mut canvas = image::RgbaImage::from_pixel(600, 500, Rgba([255, 255, 255, 255]));
         image::imageops::overlay(&mut canvas, &qr_rgba, 50, 60);
 
         let decoder = RqrrDecoder::new();
         let rows = decode_region(
             &decoder,
             &canvas,
-            &RegionBounds { x: 50, y: 60, w: qw, h: qh, monitor_index: 3 },
+            &RegionBounds {
+                x: 50,
+                y: 60,
+                w: qw,
+                h: qh,
+                monitor_index: 3,
+            },
             "batch-region",
             123,
         )

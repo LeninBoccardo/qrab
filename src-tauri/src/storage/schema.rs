@@ -37,8 +37,7 @@ const MIGRATIONS: &[&str] = &[
 ];
 
 pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
-    let current_version: i64 =
-        conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    let current_version: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
     for (idx, sql) in MIGRATIONS.iter().enumerate() {
         let target_version = (idx as i64) + 1;
         if current_version >= target_version {
@@ -51,11 +50,7 @@ pub fn run_migrations(conn: &mut Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
-fn apply(
-    tx: &Transaction<'_>,
-    sql: &str,
-    target_version: i64,
-) -> rusqlite::Result<()> {
+fn apply(tx: &Transaction<'_>, sql: &str, target_version: i64) -> rusqlite::Result<()> {
     tx.execute_batch(sql)?;
     // `PRAGMA user_version = N` doesn't accept a bind parameter, so we
     // format it ourselves — `target_version` is an internal i64, not user
@@ -112,11 +107,9 @@ mod tests {
         )
         .expect("insert");
         let (copied, copied_at): (i64, Option<i64>) = conn
-            .query_row(
-                "SELECT copied, copied_at FROM scans LIMIT 1",
-                [],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
+            .query_row("SELECT copied, copied_at FROM scans LIMIT 1", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
             .expect("select copied columns");
         assert_eq!(copied, 0);
         assert_eq!(copied_at, None);

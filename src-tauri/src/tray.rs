@@ -17,8 +17,7 @@ pub const TRAY_ID: &str = "qrab-tray";
 /// PNG bytes embedded at compile time. Sourced from the branded
 /// extraction in docs/branding/extracted/tray-icon.png. Re-extracted via
 /// `npm run icons` whenever the visual identity sheet changes.
-const TRAY_ICON_PNG: &[u8] =
-    include_bytes!("../../docs/branding/extracted/tray-icon.png");
+const TRAY_ICON_PNG: &[u8] = include_bytes!("../../docs/branding/extracted/tray-icon.png");
 
 /// Decode the embedded PNG into Tauri's raw-RGBA Image form. Done once
 /// at tray install. Errors here mean the PNG is corrupt — `npm run icons`
@@ -43,34 +42,15 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
     )?;
     let top_sep = PredefinedMenuItem::separator(app)?;
     let scan = MenuItem::with_id(app, "scan", "Scan now", true, None::<&str>)?;
-    let history = MenuItem::with_id(
-        app,
-        "history",
-        "View history",
-        true,
-        None::<&str>,
-    )?;
-    let settings = MenuItem::with_id(
-        app,
-        "settings",
-        "Settings…",
-        true,
-        None::<&str>,
-    )?;
-    let config = MenuItem::with_id(
-        app,
-        "config",
-        "Config…",
-        true,
-        None::<&str>,
-    )?;
+    let history = MenuItem::with_id(app, "history", "View history", true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+    let config = MenuItem::with_id(app, "config", "Config…", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
         &[
-            &version, &top_sep, &scan, &history, &settings, &config,
-            &separator, &quit,
+            &version, &top_sep, &scan, &history, &settings, &config, &separator, &quit,
         ],
     )?;
 
@@ -131,9 +111,7 @@ fn navigate<R: Runtime>(app: &AppHandle<R>, route: &str) {
         "navigate() route must be non-empty lowercase ASCII letters; got {route:?}"
     );
     crate::windows::show_results_window(app);
-    if let Some(window) =
-        app.get_webview_window(crate::windows::RESULTS_WINDOW)
-    {
+    if let Some(window) = app.get_webview_window(crate::windows::RESULTS_WINDOW) {
         let js = format!("window.location.hash = '{route}';");
         if let Err(e) = window.eval(&js) {
             log::warn!("failed to navigate to #{route}: {e}");

@@ -60,9 +60,7 @@ impl HeldScreenshot {
             .monitors
             .iter()
             .find(|m| m.index == monitor_index)
-            .ok_or_else(|| {
-                format!("monitor index {monitor_index} not in screenshot")
-            })?;
+            .ok_or_else(|| format!("monitor index {monitor_index} not in screenshot"))?;
 
         let mut buf = Vec::new();
         PngEncoder::new(&mut buf)
@@ -100,10 +98,7 @@ impl ScreenshotStore {
     /// Return the held screenshot iff its id matches. Cheap — clones an
     /// `Arc`, not the pixel buffers.
     pub fn get_if_id(&self, id: &str) -> Option<Arc<HeldScreenshot>> {
-        self.lock()
-            .as_ref()
-            .filter(|h| h.id == id)
-            .map(Arc::clone)
+        self.lock().as_ref().filter(|h| h.id == id).map(Arc::clone)
     }
 
     pub fn clear(&self) {
@@ -137,7 +132,10 @@ mod tests {
     fn held(id: &str, taken_at: Instant) -> HeldScreenshot {
         HeldScreenshot::new(
             id.to_string(),
-            vec![MonitorImage { index: 0, image: RgbaImage::new(1, 1) }],
+            vec![MonitorImage {
+                index: 0,
+                image: RgbaImage::new(1, 1),
+            }],
             taken_at,
         )
     }
@@ -195,7 +193,10 @@ mod tests {
         let held = held("p", Instant::now());
         let first = held.png_for(0).expect("first encode");
         let second = held.png_for(0).expect("cache hit");
-        assert!(Arc::ptr_eq(&first, &second), "second call must return cached bytes");
+        assert!(
+            Arc::ptr_eq(&first, &second),
+            "second call must return cached bytes"
+        );
         assert!(!first.is_empty(), "encoded PNG should not be empty");
     }
 

@@ -16,12 +16,11 @@ pub mod windows;
 
 use capture::XcapCapturer;
 use commands::{
-    consume_pending_scan, copy_row, copy_rows_as_json, copy_to_clipboard,
-    get_app_info, get_default_settings, get_hotkey_status,
-    get_screenshot_monitor_png, get_screenshot_monitors, get_settings,
-    hide_results_window, history_clear, history_delete, history_delete_bulk,
-    history_query, open_screen_recording_prefs, open_url, open_urls_bulk,
-    scan_region, scan_screen, set_settings, AppState,
+    consume_pending_scan, copy_row, copy_rows_as_json, copy_to_clipboard, get_app_info,
+    get_default_settings, get_hotkey_status, get_screenshot_monitor_png, get_screenshot_monitors,
+    get_settings, hide_results_window, history_clear, history_delete, history_delete_bulk,
+    history_query, open_screen_recording_prefs, open_url, open_urls_bulk, scan_region, scan_screen,
+    set_settings, AppState,
 };
 use decoder::RqrrDecoder;
 use screenshot::ScreenshotStore;
@@ -79,7 +78,10 @@ pub fn run() {
             open_screen_recording_prefs
         ])
         .setup(|app| {
-            log::info!("qrab starting (logs dir: {})", logging::logs_dir().display());
+            log::info!(
+                "qrab starting (logs dir: {})",
+                logging::logs_dir().display()
+            );
 
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -102,9 +104,7 @@ pub fn run() {
             // is stale. Trust the OS, update the cache, write back so the
             // next launch starts in sync.
             if settings::reconcile_autostart(app.handle(), &mut loaded_settings) {
-                if let Err(e) =
-                    settings::save_to_store(app.handle(), &loaded_settings)
-                {
+                if let Err(e) = settings::save_to_store(app.handle(), &loaded_settings) {
                     log::warn!("failed to persist reconciled settings: {e}");
                 }
             }
@@ -145,8 +145,7 @@ pub fn run() {
                         let logical_h = monitor.size().height as f64 / scale;
                         let target_w = (logical_w * 0.6).clamp(520.0, 1200.0);
                         let target_h = (logical_h * 0.6).clamp(420.0, 800.0);
-                        if let Err(e) =
-                            window.set_size(tauri::LogicalSize::new(target_w, target_h))
+                        if let Err(e) = window.set_size(tauri::LogicalSize::new(target_w, target_h))
                         {
                             log::warn!("could not resize results window: {e}");
                         }

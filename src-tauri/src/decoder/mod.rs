@@ -77,10 +77,7 @@ mod tests {
 
     #[test]
     fn classifies_wifi_payload() {
-        assert_eq!(
-            classify_kind("WIFI:T:WPA;S:MyNet;P:secret;;"),
-            QrKind::Wifi
-        );
+        assert_eq!(classify_kind("WIFI:T:WPA;S:MyNet;P:secret;;"), QrKind::Wifi);
     }
 
     #[test]

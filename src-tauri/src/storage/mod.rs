@@ -29,7 +29,9 @@ impl Storage {
         // Wait briefly on writer contention rather than failing fast.
         conn.busy_timeout(std::time::Duration::from_secs(2))?;
         schema::run_migrations(&mut conn)?;
-        Ok(Self { inner: Arc::new(Mutex::new(conn)) })
+        Ok(Self {
+            inner: Arc::new(Mutex::new(conn)),
+        })
     }
 
     /// In-memory database — used by tests. Gated on `cfg(test)` so it
@@ -38,7 +40,9 @@ impl Storage {
     pub(crate) fn in_memory() -> rusqlite::Result<Self> {
         let mut conn = Connection::open_in_memory()?;
         schema::run_migrations(&mut conn)?;
-        Ok(Self { inner: Arc::new(Mutex::new(conn)) })
+        Ok(Self {
+            inner: Arc::new(Mutex::new(conn)),
+        })
     }
 
     /// Lock the underlying connection. Recovers from poisoning since the

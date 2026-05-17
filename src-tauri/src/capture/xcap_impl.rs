@@ -19,8 +19,7 @@ impl XcapCapturer {
 
 impl Capturer for XcapCapturer {
     fn capture_all(&self) -> Result<Vec<MonitorImage>, CaptureError> {
-        let monitors =
-            Monitor::all().map_err(|e| classify_xcap_error(e.to_string(), None))?;
+        let monitors = Monitor::all().map_err(|e| classify_xcap_error(e.to_string(), None))?;
 
         let mut images = Vec::with_capacity(monitors.len());
         for (index, monitor) in monitors.iter().enumerate() {
@@ -35,14 +34,14 @@ impl Capturer for XcapCapturer {
 
 fn classify_xcap_error(msg: String, index: Option<usize>) -> CaptureError {
     let lower = msg.to_lowercase();
-    if lower.contains("permission")
-        || lower.contains("denied")
-        || lower.contains("not allowed")
-    {
+    if lower.contains("permission") || lower.contains("denied") || lower.contains("not allowed") {
         return CaptureError::PermissionDenied;
     }
     match index {
-        Some(i) => CaptureError::Monitor { index: i, message: msg },
+        Some(i) => CaptureError::Monitor {
+            index: i,
+            message: msg,
+        },
         None => CaptureError::Enumerate(msg),
     }
 }

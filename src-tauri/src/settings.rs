@@ -55,7 +55,9 @@ pub struct SettingsStore {
 
 impl SettingsStore {
     pub fn new(initial: Settings) -> Self {
-        Self { inner: Arc::new(Mutex::new(initial)) }
+        Self {
+            inner: Arc::new(Mutex::new(initial)),
+        }
     }
 
     pub fn get(&self) -> Settings {
@@ -94,13 +96,9 @@ pub fn load_from_store<R: Runtime>(app: &AppHandle<R>) -> Settings {
 
 /// Persist the current settings. Caller is expected to have already
 /// updated [`SettingsStore`] — this is just the durability hop.
-pub fn save_to_store<R: Runtime>(
-    app: &AppHandle<R>,
-    settings: &Settings,
-) -> anyhow::Result<()> {
+pub fn save_to_store<R: Runtime>(app: &AppHandle<R>, settings: &Settings) -> anyhow::Result<()> {
     let store = app.store(STORE_FILE).context("open settings store")?;
-    let value =
-        serde_json::to_value(settings).context("serialize settings")?;
+    let value = serde_json::to_value(settings).context("serialize settings")?;
     store.set(STORE_KEY, value);
     store.save().context("flush settings store")?;
     Ok(())
@@ -108,10 +106,7 @@ pub fn save_to_store<R: Runtime>(
 
 /// Bring the OS autostart entry in line with `enabled`. The autostart
 /// plugin already no-ops when called with the current state.
-pub fn sync_autostart<R: Runtime>(
-    app: &AppHandle<R>,
-    enabled: bool,
-) -> anyhow::Result<()> {
+pub fn sync_autostart<R: Runtime>(app: &AppHandle<R>, enabled: bool) -> anyhow::Result<()> {
     let manager = app.autolaunch();
     if enabled {
         manager.enable().context("enable autostart")?;
@@ -129,10 +124,7 @@ pub fn sync_autostart<R: Runtime>(
 /// entry the user deliberately removed.
 ///
 /// Returns `true` if `settings.autostart` was mutated.
-pub fn reconcile_autostart<R: Runtime>(
-    app: &AppHandle<R>,
-    settings: &mut Settings,
-) -> bool {
+pub fn reconcile_autostart<R: Runtime>(app: &AppHandle<R>, settings: &mut Settings) -> bool {
     match app.autolaunch().is_enabled() {
         Ok(actual) if actual != settings.autostart => {
             log::info!(
