@@ -45,6 +45,12 @@ export const RegionSelector: Component<RegionSelectorProps> = (props) => {
   // Re-render-trigger for layout-derived math. Bumped on window resize.
   const [layoutTick, setLayoutTick] = createSignal(0);
   let imgRef: HTMLImageElement | undefined;
+  // Cached image rect for the duration of a drag. mousemove fires at the
+  // browser's refresh rate, and reading getBoundingClientRect on each event
+  // is cheap individually but still adds up — and any DOM mutation between
+  // events would force a layout flush. We capture once on mousedown and
+  // reuse for the whole drag; the image doesn't move while the user drags.
+  let dragRect: DOMRect | null = null;
 
   const bounds = createMemo<Bounds | null>(() => {
     const a = start();
@@ -58,9 +64,11 @@ export const RegionSelector: Component<RegionSelectorProps> = (props) => {
     return { x, y, w, h };
   });
 
-  function clientToImageCoords(clientX: number, clientY: number): Point | null {
-    if (!imgRef) return null;
-    const rect = imgRef.getBoundingClientRect();
+  function rectToImageCoords(
+    rect: DOMRect,
+    clientX: number,
+    clientY: number,
+  ): Point | null {
     if (rect.width === 0 || rect.height === 0) return null;
     const cssX = clamp(clientX - rect.left, 0, rect.width);
     const cssY = clamp(clientY - rect.top, 0, rect.height);
@@ -71,21 +79,27 @@ export const RegionSelector: Component<RegionSelectorProps> = (props) => {
 
   function onMouseDown(e: MouseEvent): void {
     if (e.button !== 0) return;
-    const p = clientToImageCoords(e.clientX, e.clientY);
-    if (!p) return;
+    if (!imgRef) return;
+    dragRect = imgRef.getBoundingClientRect();
+    const p = rectToImageCoords(dragRect, e.clientX, e.clientY);
+    if (!p) {
+      dragRect = null;
+      return;
+    }
     setStart(p);
     setEnd(p);
     setDragging(true);
   }
 
   function onMouseMove(e: MouseEvent): void {
-    if (!dragging()) return;
-    const p = clientToImageCoords(e.clientX, e.clientY);
+    if (!dragging() || !dragRect) return;
+    const p = rectToImageCoords(dragRect, e.clientX, e.clientY);
     if (p) setEnd(p);
   }
 
   function onMouseUp(): void {
     setDragging(false);
+    dragRect = null;
   }
 
   function onKeyDown(e: KeyboardEvent): void {
