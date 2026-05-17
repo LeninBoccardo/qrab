@@ -274,11 +274,11 @@ export const ResultsWindow: Component = () => {
             class="shrink-0 text-amber-700 dark:text-amber-300"
           />
           <span class="flex-1 text-amber-900 dark:text-amber-100">
-            Screen Recording permission is required for qrab to see your
-            screen.
+            Screen Recording permission is required for qrab to see your screen.
             <Show when={isMac()}>
-              {" "}Open System Settings, enable qrab under Privacy &amp;
-              Security → Screen Recording, then quit and reopen qrab.
+              {" "}
+              Open System Settings, enable qrab under Privacy &amp; Security →
+              Screen Recording, then quit and reopen qrab.
             </Show>
           </span>
           <Show when={isMac()}>

@@ -1,9 +1,4 @@
-import {
-  Component,
-  createEffect,
-  createSignal,
-  onCleanup,
-} from "solid-js";
+import { Component, createEffect, createSignal, onCleanup } from "solid-js";
 import clsx from "clsx";
 import { Button } from "./ui/Button";
 

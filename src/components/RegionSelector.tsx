@@ -153,7 +153,9 @@ export const RegionSelector: Component<RegionSelectorProps> = (props) => {
         </Show>
       </div>
       <div class="flex items-center justify-between gap-3 border-t border-neutral-800 bg-neutral-950 px-4 py-2 text-xs text-neutral-400">
-        <span>Drag a rectangle around the QR. Esc to cancel, Enter to decode.</span>
+        <span>
+          Drag a rectangle around the QR. Esc to cancel, Enter to decode.
+        </span>
         <div class="flex gap-2">
           <Button variant="ghost" onClick={() => props.onCancel()}>
             Cancel

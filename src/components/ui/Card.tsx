@@ -2,9 +2,7 @@ import type { JSX } from "solid-js";
 import { splitProps } from "solid-js";
 import clsx from "clsx";
 
-export function Card(
-  props: JSX.HTMLAttributes<HTMLDivElement>,
-): JSX.Element {
+export function Card(props: JSX.HTMLAttributes<HTMLDivElement>): JSX.Element {
   const [local, rest] = splitProps(props, ["class", "children"]);
   return (
     <div

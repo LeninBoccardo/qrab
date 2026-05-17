@@ -1,10 +1,4 @@
-import {
-  debug,
-  error,
-  info,
-  trace,
-  warn,
-} from "@tauri-apps/plugin-log";
+import { debug, error, info, trace, warn } from "@tauri-apps/plugin-log";
 
 export { debug, error, info, trace, warn };
 
@@ -29,12 +23,9 @@ export function installGlobalErrorLogging(): void {
   installed = true;
 
   window.addEventListener("error", (e) => {
-    const where = e.filename
-      ? ` at ${e.filename}:${e.lineno}:${e.colno}`
-      : "";
-    const stack = e.error instanceof Error && e.error.stack
-      ? `\n${e.error.stack}`
-      : "";
+    const where = e.filename ? ` at ${e.filename}:${e.lineno}:${e.colno}` : "";
+    const stack =
+      e.error instanceof Error && e.error.stack ? `\n${e.error.stack}` : "";
     void error(`Uncaught error: ${e.message}${where}${stack}`);
   });
 

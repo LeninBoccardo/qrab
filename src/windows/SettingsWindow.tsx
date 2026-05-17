@@ -169,8 +169,8 @@ export const SettingsWindow: Component = () => {
           <Dialog.Content class="w-[420px]">
             <Dialog.Title>Reset all settings?</Dialog.Title>
             <Dialog.Description>
-              This restores hotkey, theme, autostart and the behavior
-              toggles to their defaults. Scan history is not affected.
+              This restores hotkey, theme, autostart and the behavior toggles to
+              their defaults. Scan history is not affected.
             </Dialog.Description>
             <div class="mt-5 flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setResetOpen(false)}>
@@ -188,8 +188,6 @@ export const SettingsWindow: Component = () => {
     </main>
   );
 };
-
-
 
 interface RowProps {
   label: string;
@@ -238,4 +236,3 @@ const ToggleRow: Component<ToggleRowProps> = (props) => (
     </Switch.Control>
   </Switch.Root>
 );
-

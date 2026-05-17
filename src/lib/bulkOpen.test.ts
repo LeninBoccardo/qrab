@@ -50,13 +50,10 @@ describe("planOpenAll", () => {
   it("counts only url rows toward the threshold", () => {
     // Mix of URLs + non-URLs where total is above threshold but URLs alone
     // are at the threshold — still no confirmation.
-    const urls = Array.from(
-      { length: BULK_OPEN_CONFIRM_THRESHOLD },
-      (_, i) => row(i + 1, "url"),
+    const urls = Array.from({ length: BULK_OPEN_CONFIRM_THRESHOLD }, (_, i) =>
+      row(i + 1, "url"),
     );
-    const nonUrls = Array.from({ length: 5 }, (_, i) =>
-      row(100 + i, "text"),
-    );
+    const nonUrls = Array.from({ length: 5 }, (_, i) => row(100 + i, "text"));
     const plan = planOpenAll([...urls, ...nonUrls]);
     expect(plan.needsConfirm).toBe(false);
     expect(plan.skippedNonUrl).toBe(5);

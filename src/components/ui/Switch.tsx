@@ -21,9 +21,7 @@ export function Label(props: ComponentProps<typeof KSwitch.Label>) {
   );
 }
 
-export function Description(
-  props: ComponentProps<typeof KSwitch.Description>,
-) {
+export function Description(props: ComponentProps<typeof KSwitch.Description>) {
   const [local, rest] = splitProps(props, ["class"]);
   return (
     <KSwitch.Description

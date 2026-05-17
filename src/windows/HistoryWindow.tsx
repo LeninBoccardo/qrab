@@ -97,9 +97,7 @@ export const HistoryWindow: Component = () => {
     if (ids.length === 0) return;
     try {
       const removed = await historyDeleteBulk(ids);
-      showToast(
-        `Deleted ${removed} ${removed === 1 ? "row" : "rows"}`,
-      );
+      showToast(`Deleted ${removed} ${removed === 1 ? "row" : "rows"}`);
       await load(true);
     } catch (err) {
       showToast(`Delete failed: ${formatError(err)}`);
@@ -118,9 +116,7 @@ export const HistoryWindow: Component = () => {
           idSet.has(r.id) ? { ...r, copied: true, copiedAt: now } : r,
         ),
       );
-      showToast(
-        `Copied ${count} ${count === 1 ? "row" : "rows"} as JSON`,
-      );
+      showToast(`Copied ${count} ${count === 1 ? "row" : "rows"} as JSON`);
     } catch (err) {
       showToast(`Copy as JSON failed: ${formatError(err)}`);
     }
@@ -161,9 +157,7 @@ export const HistoryWindow: Component = () => {
       // Reflect the new opened_at locally so the UI updates without a re-query
       setRows((prev) =>
         prev.map((r) =>
-          r.id === row.id
-            ? { ...r, opened: true, openedAt: Date.now() }
-            : r,
+          r.id === row.id ? { ...r, opened: true, openedAt: Date.now() } : r,
         ),
       );
     } catch (err) {

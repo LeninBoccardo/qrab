@@ -49,14 +49,8 @@ export const ConfirmOpenAll: Component<ConfirmOpenAllProps> = (props) => {
             <For each={props.rows}>
               {(row) => (
                 <li class="flex items-center gap-2 px-1.5 py-1 text-neutral-700 dark:text-neutral-300">
-                  <ExternalLink
-                    size={12}
-                    class="shrink-0 text-neutral-400"
-                  />
-                  <span
-                    class="truncate font-mono text-xs"
-                    title={row.content}
-                  >
+                  <ExternalLink size={12} class="shrink-0 text-neutral-400" />
+                  <span class="truncate font-mono text-xs" title={row.content}>
                     {row.content}
                   </span>
                 </li>
@@ -67,8 +61,7 @@ export const ConfirmOpenAll: Component<ConfirmOpenAllProps> = (props) => {
           <Show when={props.skippedNonUrl > 0}>
             <p class="mt-2 text-xs text-neutral-500">
               +{props.skippedNonUrl} non-URL{" "}
-              {props.skippedNonUrl === 1 ? "item" : "items"} will not be
-              opened.
+              {props.skippedNonUrl === 1 ? "item" : "items"} will not be opened.
             </p>
           </Show>
 

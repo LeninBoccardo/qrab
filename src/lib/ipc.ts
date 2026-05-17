@@ -59,8 +59,7 @@ export const historyDelete = (id: number): Promise<void> =>
 export const historyDeleteBulk = (ids: number[]): Promise<number> =>
   invoke<number>("history_delete_bulk", { ids });
 
-export const historyClear = (): Promise<void> =>
-  invoke<void>("history_clear");
+export const historyClear = (): Promise<void> => invoke<void>("history_clear");
 
 export const hideResultsWindow = (): Promise<void> =>
   invoke<void>("hide_results_window");

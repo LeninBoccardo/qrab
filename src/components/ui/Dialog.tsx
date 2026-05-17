@@ -53,9 +53,7 @@ export function Title(props: ComponentProps<typeof KDialog.Title>) {
   );
 }
 
-export function Description(
-  props: ComponentProps<typeof KDialog.Description>,
-) {
+export function Description(props: ComponentProps<typeof KDialog.Description>) {
   const [local, rest] = splitProps(props, ["class"]);
   return (
     <KDialog.Description

@@ -14,7 +14,8 @@ function systemPrefersDark(): boolean {
 /// so this single toggle drives every `dark:` utility across the app.
 export function applyTheme(theme: Theme): void {
   const root = document.documentElement;
-  const wantDark = theme === "dark" || (theme === "system" && systemPrefersDark());
+  const wantDark =
+    theme === "dark" || (theme === "system" && systemPrefersDark());
   root.classList.toggle(DARK_CLASS, wantDark);
 }
 
