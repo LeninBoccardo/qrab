@@ -1,0 +1,72 @@
+{
+  "$comment": "Crop map for scripts/extract-icons.mjs. Run with --preview to overlay rectangles on the source before extracting. Pixel coordinates against the 1448×1086 visual_identity.png.",
+  "source": "docs/branding/visual_identity.png",
+  "outDir": "docs/branding/extracted",
+  "outputs": [
+    {
+      "name": "primary-logo",
+      "crop": { "left": 60, "top": 70, "width": 605, "height": 150 },
+      "transparent": "lighten"
+    },
+    {
+      "name": "logomark",
+      "crop": { "left": 60, "top": 70, "width": 165, "height": 165 },
+      "transparent": "lighten"
+    },
+    {
+      "name": "wordmark",
+      "crop": { "left": 210, "top": 80, "width": 445, "height": 130 },
+      "transparent": "lighten"
+    },
+    {
+      "name": "app-icon",
+      "crop": { "left": 720, "top": 75, "width": 280, "height": 210 },
+      "transparent": "none"
+    },
+    {
+      "name": "tray-icon",
+      "crop": { "left": 1130, "top": 120, "width": 110, "height": 110 },
+      "transparent": "lighten"
+    },
+    {
+      "name": "tray-light-16",
+      "crop": { "left": 298, "top": 908, "width": 44, "height": 44 },
+      "transparent": "lighten"
+    },
+    {
+      "name": "tray-light-20",
+      "crop": { "left": 563, "top": 906, "width": 44, "height": 44 },
+      "transparent": "lighten"
+    },
+    {
+      "name": "tray-light-24",
+      "crop": { "left": 825, "top": 903, "width": 50, "height": 50 },
+      "transparent": "lighten"
+    },
+    {
+      "name": "tray-light-32",
+      "crop": { "left": 1085, "top": 900, "width": 60, "height": 60 },
+      "transparent": "lighten"
+    },
+    {
+      "name": "tray-dark-16",
+      "crop": { "left": 298, "top": 983, "width": 44, "height": 44 },
+      "transparent": "darken"
+    },
+    {
+      "name": "tray-dark-20",
+      "crop": { "left": 563, "top": 981, "width": 44, "height": 44 },
+      "transparent": "darken"
+    },
+    {
+      "name": "tray-dark-24",
+      "crop": { "left": 825, "top": 978, "width": 50, "height": 50 },
+      "transparent": "darken"
+    },
+    {
+      "name": "tray-dark-32",
+      "crop": { "left": 1085, "top": 975, "width": 60, "height": 60 },
+      "transparent": "darken"
+    }
+  ]
+}
