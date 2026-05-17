@@ -134,6 +134,37 @@ pub fn get_by_id(storage: &Storage, id: i64) -> rusqlite::Result<Option<ScanRow>
     }
 }
 
+/// Fetch multiple rows by primary key in one statement. The returned `Vec`
+/// is ordered to match `ids` (with any missing IDs simply omitted). Empty
+/// input is a no-op that hits no DB.
+pub fn get_by_ids(
+    storage: &Storage,
+    ids: &[i64],
+) -> rusqlite::Result<Vec<ScanRow>> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders = vec!["?"; ids.len()].join(",");
+    let sql = format!(
+        "SELECT id, batch_id, content, kind, monitor_index, scanned_at, \
+                opened, opened_at, copied, copied_at
+         FROM scans WHERE id IN ({placeholders})"
+    );
+    let conn = storage.lock();
+    let mut stmt = conn.prepare(&sql)?;
+    let fetched = stmt
+        .query_map(
+            params_from_iter(ids.iter()),
+            ScanRow::from_db_row,
+        )?
+        .collect::<Result<Vec<_>, _>>()?;
+    // Preserve caller-provided order so JSON output and per-row mark
+    // operations remain deterministic.
+    let mut by_id: std::collections::HashMap<i64, ScanRow> =
+        fetched.into_iter().map(|r| (r.id, r)).collect();
+    Ok(ids.iter().filter_map(|id| by_id.remove(id)).collect())
+}
+
 /// Filter parameters for [`history_query`]. Matches the §7 frontend type.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -235,10 +266,73 @@ pub fn mark_copied(
     )
 }
 
+/// Bulk-mark rows as opened with a shared `opened_at`. Single UPDATE so
+/// the mutex is held once. Empty input is a no-op.
+pub fn mark_opened_many(
+    storage: &Storage,
+    ids: &[i64],
+    now_ms: i64,
+) -> rusqlite::Result<usize> {
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let placeholders = vec!["?"; ids.len()].join(",");
+    let sql = format!(
+        "UPDATE scans SET opened = 1, opened_at = ? WHERE id IN ({placeholders})"
+    );
+    let conn = storage.lock();
+    let mut stmt = conn.prepare(&sql)?;
+    let mut binds: Vec<Box<dyn ToSql>> = Vec::with_capacity(ids.len() + 1);
+    binds.push(Box::new(now_ms));
+    for id in ids {
+        binds.push(Box::new(*id));
+    }
+    stmt.execute(params_from_iter(binds.iter().map(|b| b.as_ref())))
+}
+
+/// Bulk-mark rows as copied with a shared `copied_at`. Single UPDATE so
+/// the mutex is held once. Empty input is a no-op.
+pub fn mark_copied_many(
+    storage: &Storage,
+    ids: &[i64],
+    now_ms: i64,
+) -> rusqlite::Result<usize> {
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let placeholders = vec!["?"; ids.len()].join(",");
+    let sql = format!(
+        "UPDATE scans SET copied = 1, copied_at = ? WHERE id IN ({placeholders})"
+    );
+    let conn = storage.lock();
+    let mut stmt = conn.prepare(&sql)?;
+    let mut binds: Vec<Box<dyn ToSql>> = Vec::with_capacity(ids.len() + 1);
+    binds.push(Box::new(now_ms));
+    for id in ids {
+        binds.push(Box::new(*id));
+    }
+    stmt.execute(params_from_iter(binds.iter().map(|b| b.as_ref())))
+}
+
 /// Delete one row. Returns the number of rows deleted.
 pub fn delete_by_id(storage: &Storage, id: i64) -> rusqlite::Result<usize> {
     let conn = storage.lock();
     conn.execute("DELETE FROM scans WHERE id = ?1", params![id])
+}
+
+/// Delete multiple rows in one statement. Empty input is a no-op.
+pub fn delete_by_ids(
+    storage: &Storage,
+    ids: &[i64],
+) -> rusqlite::Result<usize> {
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let placeholders = vec!["?"; ids.len()].join(",");
+    let sql = format!("DELETE FROM scans WHERE id IN ({placeholders})");
+    let conn = storage.lock();
+    let mut stmt = conn.prepare(&sql)?;
+    stmt.execute(params_from_iter(ids.iter()))
 }
 
 /// Wipe the entire history. Returns the number of rows deleted.
@@ -590,6 +684,105 @@ mod tests {
         let remaining =
             history_query(&storage, &empty_filter(10)).expect("query");
         assert_eq!(remaining.len(), 3);
+    }
+
+    #[test]
+    fn get_by_ids_returns_rows_in_caller_order() {
+        let storage = fresh();
+        let ids = seed_history(&storage);
+        // Request in a deliberately scrambled order; ensure the result
+        // preserves that ordering rather than DB-natural order.
+        let requested = vec![ids[2], ids[0], ids[3], ids[1]];
+        let rows = get_by_ids(&storage, &requested).expect("get_by_ids");
+        let returned: Vec<i64> = rows.iter().map(|r| r.id).collect();
+        assert_eq!(returned, requested);
+    }
+
+    #[test]
+    fn get_by_ids_skips_missing_ids() {
+        let storage = fresh();
+        let ids = seed_history(&storage);
+        let rows =
+            get_by_ids(&storage, &[ids[0], 9999, ids[1]]).expect("get_by_ids");
+        let returned: Vec<i64> = rows.iter().map(|r| r.id).collect();
+        assert_eq!(returned, vec![ids[0], ids[1]]);
+    }
+
+    #[test]
+    fn get_by_ids_empty_input_is_no_op() {
+        let storage = fresh();
+        seed_history(&storage);
+        let rows = get_by_ids(&storage, &[]).expect("get_by_ids");
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn mark_opened_many_stamps_every_id_and_skips_others() {
+        let storage = fresh();
+        let ids = seed_history(&storage);
+        let updated = mark_opened_many(&storage, &[ids[0], ids[2]], 7777)
+            .expect("mark_opened_many");
+        assert_eq!(updated, 2);
+        for (i, id) in ids.iter().enumerate() {
+            let row = get_by_id(&storage, *id).expect("get").expect("some");
+            if i == 0 || i == 2 {
+                assert!(row.opened, "id {} should be opened", id);
+                assert_eq!(row.opened_at, Some(7777));
+            } else {
+                assert!(!row.opened, "id {} should still be unopened", id);
+                assert_eq!(row.opened_at, None);
+            }
+        }
+    }
+
+    #[test]
+    fn mark_copied_many_stamps_every_id_and_skips_others() {
+        let storage = fresh();
+        let ids = seed_history(&storage);
+        let updated = mark_copied_many(&storage, &[ids[1], ids[3]], 9999)
+            .expect("mark_copied_many");
+        assert_eq!(updated, 2);
+        for (i, id) in ids.iter().enumerate() {
+            let row = get_by_id(&storage, *id).expect("get").expect("some");
+            if i == 1 || i == 3 {
+                assert!(row.copied);
+                assert_eq!(row.copied_at, Some(9999));
+            } else {
+                assert!(!row.copied);
+                assert_eq!(row.copied_at, None);
+            }
+        }
+    }
+
+    #[test]
+    fn mark_opened_many_empty_input_is_no_op() {
+        let storage = fresh();
+        seed_history(&storage);
+        let updated = mark_opened_many(&storage, &[], 1).expect("mark");
+        assert_eq!(updated, 0);
+    }
+
+    #[test]
+    fn delete_by_ids_removes_listed_rows_only() {
+        let storage = fresh();
+        let ids = seed_history(&storage);
+        let removed =
+            delete_by_ids(&storage, &[ids[0], ids[2]]).expect("delete_by_ids");
+        assert_eq!(removed, 2);
+        let remaining =
+            history_query(&storage, &empty_filter(10)).expect("query");
+        let remaining_ids: Vec<i64> = remaining.iter().map(|r| r.id).collect();
+        assert_eq!(remaining_ids.len(), 2);
+        assert!(remaining_ids.contains(&ids[1]));
+        assert!(remaining_ids.contains(&ids[3]));
+    }
+
+    #[test]
+    fn delete_by_ids_empty_input_is_no_op() {
+        let storage = fresh();
+        seed_history(&storage);
+        let removed = delete_by_ids(&storage, &[]).expect("delete_by_ids");
+        assert_eq!(removed, 0);
     }
 
     #[test]

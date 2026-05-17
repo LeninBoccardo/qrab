@@ -14,6 +14,7 @@ import {
   hideResultsWindow,
   historyClear,
   historyDelete,
+  historyDeleteBulk,
   historyQuery,
   openUrl,
   openUrlsBulk,
@@ -95,11 +96,9 @@ export const HistoryWindow: Component = () => {
     const ids = [...selected()];
     if (ids.length === 0) return;
     try {
-      for (const id of ids) {
-        await historyDelete(id);
-      }
+      const removed = await historyDeleteBulk(ids);
       showToast(
-        `Deleted ${ids.length} ${ids.length === 1 ? "row" : "rows"}`,
+        `Deleted ${removed} ${removed === 1 ? "row" : "rows"}`,
       );
       await load(true);
     } catch (err) {

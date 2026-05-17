@@ -55,6 +55,10 @@ export const historyQuery = (filter: HistoryFilter): Promise<ScanRow[]> =>
 export const historyDelete = (id: number): Promise<void> =>
   invoke<void>("history_delete", { id });
 
+/** Delete many rows in one IPC round-trip + one SQL statement. */
+export const historyDeleteBulk = (ids: number[]): Promise<number> =>
+  invoke<number>("history_delete_bulk", { ids });
+
 export const historyClear = (): Promise<void> =>
   invoke<void>("history_clear");
 

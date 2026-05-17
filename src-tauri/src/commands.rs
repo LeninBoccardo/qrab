@@ -11,9 +11,11 @@ use crate::decoder::{classify_kind, Decoder, QrKind};
 use crate::screenshot::{HeldScreenshot, ScreenshotStore};
 use crate::settings::{Settings, SettingsStore};
 use crate::storage::queries::{
-    delete_all, delete_by_id, get_by_id, history_query as history_query_db,
-    insert_batch, mark_copied as mark_copied_db,
-    mark_opened as mark_opened_db, HistoryFilter, NewScanRow, ScanRow,
+    delete_all, delete_by_id, delete_by_ids, get_by_id, get_by_ids,
+    history_query as history_query_db, insert_batch,
+    mark_copied as mark_copied_db, mark_copied_many,
+    mark_opened as mark_opened_db, mark_opened_many, HistoryFilter,
+    NewScanRow, ScanRow,
 };
 use crate::storage::Storage;
 use serde::{Deserialize, Serialize};
@@ -308,25 +310,26 @@ pub async fn copy_rows_as_json(
         if ids.is_empty() {
             return Ok(0);
         }
-        let mut rows: Vec<ScanRow> = Vec::with_capacity(ids.len());
-        for id in &ids {
-            let row = get_by_id(&storage, *id)
-                .map_err(|e| format!("storage: {e}"))?
-                .ok_or_else(|| format!("row {id} not found"))?;
-            rows.push(row);
+        let rows =
+            get_by_ids(&storage, &ids).map_err(|e| format!("storage: {e}"))?;
+        if rows.len() != ids.len() {
+            // Surface the first missing id so the UI can show a useful error
+            // — happens if rows were deleted between selection and copy.
+            let found: HashSet<i64> = rows.iter().map(|r| r.id).collect();
+            let missing = ids.iter().find(|id| !found.contains(id));
+            if let Some(id) = missing {
+                return Err(format!("row {id} not found"));
+            }
         }
         let json = serde_json::to_string_pretty(&rows)
             .map_err(|e| format!("serialize: {e}"))?;
         app.clipboard()
             .write_text(json)
             .map_err(|e| e.to_string())?;
-        let now_ms = current_epoch_ms();
-        for id in &ids {
-            if let Err(e) = mark_copied_db(&storage, *id, now_ms) {
-                log::warn!("mark_copied failed for {id}: {e}");
-            }
+        if let Err(e) = mark_copied_many(&storage, &ids, current_epoch_ms()) {
+            log::warn!("mark_copied_many failed: {e}");
         }
-        Ok(ids.len())
+        Ok(rows.len())
     })
     .await
     .map_err(|e| format!("copy task panicked: {e}"))?
@@ -388,6 +391,23 @@ pub async fn history_delete(
     Ok(())
 }
 
+/// Delete many rows in one statement. Replaces an N-roundtrip frontend loop
+/// when the user multi-selects rows in the History window.
+#[tauri::command]
+pub async fn history_delete_bulk(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<usize, String> {
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    let storage = state.storage.clone();
+    tokio::task::spawn_blocking(move || delete_by_ids(&storage, &ids))
+        .await
+        .map_err(|e| format!("history task panicked: {e}"))?
+        .map_err(|e| format!("storage: {e}"))
+}
+
 /// Wipe the whole history table.
 #[tauri::command]
 pub async fn history_clear(state: State<'_, AppState>) -> Result<(), String> {
@@ -440,14 +460,20 @@ pub async fn open_urls_bulk(
     tokio::task::spawn_blocking(move || -> Result<BulkOpenResult, String> {
         // Resolve rows up front so the count check uses URLs only — non-URL
         // rows in the selection don't tab-bomb the threshold.
-        let mut url_rows: Vec<(i64, String)> = Vec::with_capacity(ids.len());
+        let rows =
+            get_by_ids(&storage, &ids).map_err(|e| format!("storage: {e}"))?;
+        if rows.len() != ids.len() {
+            let found: HashSet<i64> = rows.iter().map(|r| r.id).collect();
+            let missing = ids.iter().find(|id| !found.contains(id));
+            if let Some(id) = missing {
+                return Err(format!("row {id} not found"));
+            }
+        }
+        let mut url_rows: Vec<(i64, String)> = Vec::with_capacity(rows.len());
         let mut skipped_non_url = 0usize;
-        for id in &ids {
-            let row = get_by_id(&storage, *id)
-                .map_err(|e| format!("storage: {e}"))?
-                .ok_or_else(|| format!("row {id} not found"))?;
+        for row in rows {
             if row.kind == QrKind::Url {
-                url_rows.push((*id, row.content));
+                url_rows.push((row.id, row.content));
             } else {
                 skipped_non_url += 1;
             }
@@ -460,20 +486,22 @@ pub async fn open_urls_bulk(
             ));
         }
 
-        let now_ms = current_epoch_ms();
         let opener = app.opener();
         let mut opened = Vec::new();
         let mut failed = Vec::new();
 
         for (id, url) in url_rows {
             match opener.open_url(&url, None::<&str>) {
-                Ok(()) => {
-                    if let Err(e) = mark_opened_db(&storage, id, now_ms) {
-                        log::warn!("mark_opened failed for {id}: {e}");
-                    }
-                    opened.push(id);
-                }
+                Ok(()) => opened.push(id),
                 Err(e) => failed.push(BulkOpenFailure { id, error: e.to_string() }),
+            }
+        }
+
+        if !opened.is_empty() {
+            if let Err(e) =
+                mark_opened_many(&storage, &opened, current_epoch_ms())
+            {
+                log::warn!("mark_opened_many failed: {e}");
             }
         }
 
