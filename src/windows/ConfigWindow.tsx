@@ -14,6 +14,7 @@ import { formatError } from "../lib/format";
 import { getAppInfo, hideResultsWindow } from "../lib/ipc";
 import { loadSettings, saveSettings, settings } from "../lib/state";
 import type { Settings } from "../lib/types";
+import primaryLogo from "../../docs/branding/extracted/primary-logo.png";
 
 export const ConfigWindow: Component = () => {
   const [info] = createResource(getAppInfo);
@@ -73,7 +74,12 @@ export const ConfigWindow: Component = () => {
             }
           >
             {(i) => (
-              <div class="flex flex-col gap-1.5 text-sm text-neutral-900 dark:text-neutral-100">
+              <div class="flex flex-col gap-3 text-sm text-neutral-900 dark:text-neutral-100">
+                <img
+                  src={primaryLogo}
+                  alt="qrab"
+                  class="h-10 w-auto self-start dark:invert dark:hue-rotate-180"
+                />
                 <div class="flex items-baseline gap-2">
                   <span class="text-lg font-semibold">{i().name}</span>
                   <span class="font-mono text-xs text-neutral-500 dark:text-neutral-400">
