@@ -167,7 +167,11 @@ The full screenshot is held in memory only between capture and dismissal of the 
 4. If results = 0: show region selector directly with the captured screenshot. User drags a rectangle; cropped region is re-decoded.
 5. Results window auto-hides on Esc, blur, or after the user copies/opens (configurable in settings).
 6. Settings and history windows are separate Tauri windows opened from the tray menu.
-7. No telemetry. No network calls except when the user explicitly opens a URL.
+7. No telemetry. No network calls except when the user explicitly opens a URL,
+   or — narrowly carved out for the update check — `api.github.com` on a
+   manual "Check for updates" click or, when the user has opted into the
+   default-off auto-check toggle, once per launch. Both paths are disclosed
+   in the Config screen; no payload beyond the GET request itself is sent.
 
 ---
 
