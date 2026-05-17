@@ -4,6 +4,9 @@
 
 # qrab
 
+[![CI](https://github.com/LeninBoccardo/qrab/actions/workflows/ci.yml/badge.svg)](https://github.com/LeninBoccardo/qrab/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 A lightweight desktop utility that captures QR codes visible anywhere on your
 screen and decodes them to text or URLs — solving the problem of needing to
 point a phone camera at a QR code that's already on your PC.
