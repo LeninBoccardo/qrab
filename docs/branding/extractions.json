@@ -23,9 +23,9 @@
     },
     {
       "name": "app-icon",
-      "crop": { "left": 720, "top": 60, "width": 290, "height": 215 },
-      "transparent": "none",
-      "trim": false
+      "crop": { "left": 730, "top": 70, "width": 280, "height": 210 },
+      "transparent": "lighten",
+      "padding": 20
     },
     {
       "name": "tray-icon",
