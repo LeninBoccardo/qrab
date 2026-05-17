@@ -26,6 +26,10 @@ export const RegionSelectWindow: Component = () => {
   const [monitorIdx, setMonitorIdx] = createSignal(0);
   const [emptyMessage, setEmptyMessage] = createSignal<string | null>(null);
   const [imageUrl, setImageUrl] = createSignal<string | null>(null);
+  // Monotonic request token. The PNG load effect awaits an async IPC; if the
+  // user clicks a different monitor before the previous call resolves, the
+  // stale response must not overwrite the newer image.
+  let pngRequestSeq = 0;
 
   const [monitors] = createResource(activeScreenshotId, async (id) => {
     if (!id) return [];
@@ -49,6 +53,7 @@ export const RegionSelectWindow: Component = () => {
     on(
       () => [activeScreenshotId(), currentMonitor()?.index] as const,
       async ([id, mIdx]) => {
+        const myReq = ++pngRequestSeq;
         const previous = imageUrl();
         if (previous) URL.revokeObjectURL(previous);
         setImageUrl(null);
@@ -56,9 +61,11 @@ export const RegionSelectWindow: Component = () => {
         if (!id || mIdx === undefined) return;
         try {
           const buf = await getScreenshotMonitorPng(id, mIdx);
+          if (myReq !== pngRequestSeq) return;
           const blob = new Blob([buf], { type: "image/png" });
           setImageUrl(URL.createObjectURL(blob));
         } catch (err) {
+          if (myReq !== pngRequestSeq) return;
           showToast(`Failed to load screenshot: ${formatError(err)}`);
         }
       },
