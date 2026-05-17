@@ -6,12 +6,30 @@
 //! of exiting; only the tray "Quit" exits the process.
 
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, Runtime,
 };
 
 pub const TRAY_ID: &str = "qrab-tray";
+
+/// PNG bytes embedded at compile time. Sourced from the branded
+/// extraction in docs/branding/extracted/tray-icon.png. Re-extracted via
+/// `npm run icons` whenever the visual identity sheet changes.
+const TRAY_ICON_PNG: &[u8] =
+    include_bytes!("../../docs/branding/extracted/tray-icon.png");
+
+/// Decode the embedded PNG into Tauri's raw-RGBA Image form. Done once
+/// at tray install. Errors here mean the PNG is corrupt — `npm run icons`
+/// to regenerate.
+fn build_tray_icon() -> anyhow::Result<Image<'static>> {
+    let rgba = image::load_from_memory(TRAY_ICON_PNG)
+        .map_err(|e| anyhow::anyhow!("decode tray icon: {e}"))?
+        .to_rgba8();
+    let (width, height) = rgba.dimensions();
+    Ok(Image::new_owned(rgba.into_raw(), width, height))
+}
 
 pub fn install<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
     // Disabled label so users (and bug reports) can read the running
@@ -56,10 +74,7 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) -> anyhow::Result<()> {
         ],
     )?;
 
-    let icon = app
-        .default_window_icon()
-        .ok_or_else(|| anyhow::anyhow!("default window icon not configured"))?
-        .clone();
+    let icon = build_tray_icon()?;
 
     TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("qrab — scan QR codes on screen")
