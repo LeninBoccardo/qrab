@@ -66,3 +66,53 @@ jobs:
 
       - name: Frontend tests
         run: npm test
+
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # `check` already covers fast feedback; let the slower matrix run
+    # only once linting and tests pass on Linux so a contributor doesn't
+    # wait 10+ minutes on three OSes just to find out clippy is angry.
+    needs: check
+    strategy:
+      # Don't kill the other OSes when one fails — we want to see every
+      # platform-specific break, not just the first.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          # Cache shared across the check + build jobs on the same OS.
+          shared-key: ${{ matrix.os }}
+
+      - name: Install Tauri Linux system deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Tauri build
+        run: npm run tauri build
