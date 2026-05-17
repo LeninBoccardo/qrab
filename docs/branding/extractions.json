@@ -1,72 +1,89 @@
 {
-  "$comment": "Crop map for scripts/extract-icons.mjs. Run with --preview to overlay rectangles on the source before extracting. Pixel coordinates against the 1448×1086 visual_identity.png.",
+  "$comment": "Crop map for scripts/extract-icons.mjs. Boxes can be generous within their cell — after transparency, .trim() auto-finds content bounds and centers. Tops must be below section headers; heights must stay inside their cell to avoid catching adjacent rows.",
   "source": "docs/branding/visual_identity.png",
   "outDir": "docs/branding/extracted",
   "outputs": [
     {
       "name": "primary-logo",
-      "crop": { "left": 60, "top": 70, "width": 605, "height": 150 },
-      "transparent": "lighten"
+      "crop": { "left": 30, "top": 60, "width": 640, "height": 200 },
+      "transparent": "lighten",
+      "padding": 8
     },
     {
       "name": "logomark",
-      "crop": { "left": 60, "top": 70, "width": 165, "height": 165 },
-      "transparent": "lighten"
+      "crop": { "left": 30, "top": 60, "width": 220, "height": 200 },
+      "transparent": "lighten",
+      "padding": 8
     },
     {
       "name": "wordmark",
-      "crop": { "left": 210, "top": 80, "width": 445, "height": 130 },
-      "transparent": "lighten"
+      "crop": { "left": 235, "top": 60, "width": 435, "height": 200 },
+      "transparent": "lighten",
+      "padding": 8
     },
     {
       "name": "app-icon",
-      "crop": { "left": 720, "top": 75, "width": 280, "height": 210 },
-      "transparent": "none"
+      "crop": { "left": 720, "top": 60, "width": 290, "height": 215 },
+      "transparent": "none",
+      "trim": false
     },
     {
       "name": "tray-icon",
-      "crop": { "left": 1130, "top": 120, "width": 110, "height": 110 },
-      "transparent": "lighten"
+      "crop": { "left": 1080, "top": 80, "width": 330, "height": 200 },
+      "transparent": "lighten",
+      "padding": 6
     },
     {
       "name": "tray-light-16",
-      "crop": { "left": 298, "top": 908, "width": 44, "height": 44 },
-      "transparent": "lighten"
+      "crop": { "left": 260, "top": 890, "width": 130, "height": 70 },
+      "transparent": "lighten",
+      "padding": 4
     },
     {
       "name": "tray-light-20",
-      "crop": { "left": 563, "top": 906, "width": 44, "height": 44 },
-      "transparent": "lighten"
+      "crop": { "left": 510, "top": 890, "width": 140, "height": 70 },
+      "transparent": "lighten",
+      "padding": 4
     },
     {
       "name": "tray-light-24",
-      "crop": { "left": 825, "top": 903, "width": 50, "height": 50 },
-      "transparent": "lighten"
+      "crop": { "left": 770, "top": 890, "width": 150, "height": 70 },
+      "transparent": "lighten",
+      "padding": 4
     },
     {
       "name": "tray-light-32",
-      "crop": { "left": 1085, "top": 900, "width": 60, "height": 60 },
-      "transparent": "lighten"
+      "crop": { "left": 1030, "top": 890, "width": 170, "height": 70 },
+      "transparent": "lighten",
+      "padding": 4
     },
     {
       "name": "tray-dark-16",
-      "crop": { "left": 298, "top": 983, "width": 44, "height": 44 },
-      "transparent": "darken"
+      "crop": { "left": 260, "top": 985, "width": 130, "height": 55 },
+      "transparent": "darken",
+      "tolerance": 100,
+      "padding": 4
     },
     {
       "name": "tray-dark-20",
-      "crop": { "left": 563, "top": 981, "width": 44, "height": 44 },
-      "transparent": "darken"
+      "crop": { "left": 510, "top": 985, "width": 140, "height": 55 },
+      "transparent": "darken",
+      "tolerance": 100,
+      "padding": 4
     },
     {
       "name": "tray-dark-24",
-      "crop": { "left": 825, "top": 978, "width": 50, "height": 50 },
-      "transparent": "darken"
+      "crop": { "left": 770, "top": 985, "width": 150, "height": 55 },
+      "transparent": "darken",
+      "tolerance": 100,
+      "padding": 4
     },
     {
       "name": "tray-dark-32",
-      "crop": { "left": 1085, "top": 975, "width": 60, "height": 60 },
-      "transparent": "darken"
+      "crop": { "left": 1030, "top": 985, "width": 170, "height": 55 },
+      "transparent": "darken",
+      "tolerance": 100,
+      "padding": 4
     }
   ]
 }

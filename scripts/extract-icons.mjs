@@ -1,18 +1,25 @@
 /**
  * Extract individual icon / logo assets from the visual identity sheet.
  *
- * Usage:
- *   node scripts/extract-icons.mjs              extract all entries from JSON
- *   node scripts/extract-icons.mjs --preview    instead, write a single
- *                                               preview PNG with every
- *                                               crop drawn as a labeled
- *                                               red rectangle over the
- *                                               source. Lets you sanity-
- *                                               check coordinates before
- *                                               running the real extract.
+ * Strategy: each JSON entry specifies a *generous* bounding box around
+ * the target cell. After we apply the entry's transparency mode (zero
+ * alpha on near-white or near-black pixels), sharp's `.trim()` auto-
+ * crops to the content bounds. So the JSON crop just needs to fully
+ * contain the asset — centering happens automatically.
  *
- * The crop map and per-entry background-removal mode live in
- * docs/branding/extractions.json — adjust there, no code changes needed.
+ * Usage:
+ *   node scripts/extract-icons.mjs              extract every entry
+ *   node scripts/extract-icons.mjs --preview    overlay labeled rectangles
+ *                                               on the source so you can
+ *                                               sanity-check coordinates
+ *
+ * Per-entry options (see docs/branding/extractions.json):
+ *   crop       { left, top, width, height }   — generous bbox in source px
+ *   transparent  "lighten" | "darken" | "none"
+ *   tolerance  channel tolerance for transparency (default 30)
+ *   trim       true | false (default true except when transparent="none")
+ *   trimThreshold  trim sensitivity (default 10)
+ *   padding    transparent px added back after trim (default 0)
  */
 
 import { mkdirSync, readFileSync } from "node:fs";
@@ -49,6 +56,11 @@ async function renderPreview() {
     "#0891b2",
     "#dc2626",
     "#0284c7",
+    "#7c3aed",
+    "#059669",
+    "#f59e0b",
+    "#be185d",
+    "#1d4ed8",
   ];
   const svg = [
     `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`,
@@ -76,57 +88,80 @@ async function extractAll() {
   let count = 0;
   for (const entry of config.outputs) {
     const outPath = resolve(outDir, `${entry.name}.png`);
-    if (entry.transparent && entry.transparent !== "none") {
-      await extractWithTransparency(entry, outPath);
-    } else {
-      await sharp(sourcePath).extract(entry.crop).png().toFile(outPath);
-    }
+    await extractOne(entry, outPath);
     count++;
     console.log(`✓ ${entry.name}.png`);
   }
   console.log(`\nExtracted ${count} file(s) → ${outDir}`);
 }
 
-/**
- * Walk the cropped pixel buffer; flip alpha to 0 for pixels matching the
- * declared background tone. `lighten` zeroes near-white pixels (cells
- * designed on a light background where the logo is dark). `darken` does
- * the inverse for cells designed on dark backgrounds with white strokes.
- */
-async function extractWithTransparency(entry, outPath) {
-  const mode = entry.transparent;
-  const tolerance = entry.tolerance ?? 30; // per-channel tolerance
-  const { data, info } = await sharp(sourcePath)
-    .extract(entry.crop)
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+async function extractOne(entry, outPath) {
+  const mode = entry.transparent ?? "none";
+  const wantTrim = entry.trim ?? mode !== "none";
+  const padding = entry.padding ?? 0;
+  const trimThreshold = entry.trimThreshold ?? 10;
 
-  const buf = Buffer.from(data);
-  const channelHigh = 255 - tolerance;
-  const channelLow = tolerance;
-
-  for (let i = 0; i < buf.length; i += 4) {
-    const r = buf[i];
-    const g = buf[i + 1];
-    const b = buf[i + 2];
-    if (mode === "lighten") {
-      // Near-white → transparent. Anti-aliased edges get partial alpha
-      // proportional to how white they are.
-      if (r >= channelHigh && g >= channelHigh && b >= channelHigh) {
-        buf[i + 3] = 0;
-      }
-    } else if (mode === "darken") {
-      // Near-black/dark-gray → transparent.
-      if (r <= channelLow && g <= channelLow && b <= channelLow) {
-        buf[i + 3] = 0;
+  // Step 1: extract the generous bounding box with alpha.
+  let buf;
+  let info;
+  if (mode === "none") {
+    ({ data: buf, info } = await sharp(sourcePath)
+      .extract(entry.crop)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true }));
+  } else {
+    const tolerance = entry.tolerance ?? 30;
+    const { data, info: infoOut } = await sharp(sourcePath)
+      .extract(entry.crop)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    info = infoOut;
+    buf = Buffer.from(data);
+    const channelHigh = 255 - tolerance;
+    const channelLow = tolerance;
+    for (let i = 0; i < buf.length; i += 4) {
+      const r = buf[i];
+      const g = buf[i + 1];
+      const b = buf[i + 2];
+      if (mode === "lighten") {
+        if (r >= channelHigh && g >= channelHigh && b >= channelHigh) {
+          buf[i + 3] = 0;
+        }
+      } else if (mode === "darken") {
+        if (r <= channelLow && g <= channelLow && b <= channelLow) {
+          buf[i + 3] = 0;
+        }
       }
     }
   }
 
-  await sharp(buf, {
+  // Step 2: re-wrap into a sharp pipeline.
+  let pipeline = sharp(buf, {
     raw: { width: info.width, height: info.height, channels: 4 },
-  })
-    .png()
-    .toFile(outPath);
+  });
+
+  // Step 3: trim to content if requested. sharp.trim() with a transparent
+  // background and threshold removes alpha-0 borders (and near-alpha-0
+  // borders if threshold > 0).
+  if (wantTrim) {
+    pipeline = pipeline.trim({
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+      threshold: trimThreshold,
+    });
+  }
+
+  // Step 4: optional uniform transparent padding so the asset breathes.
+  if (padding > 0) {
+    pipeline = pipeline.extend({
+      top: padding,
+      bottom: padding,
+      left: padding,
+      right: padding,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    });
+  }
+
+  await pipeline.png().toFile(outPath);
 }
