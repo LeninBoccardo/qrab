@@ -62,11 +62,26 @@ pub async fn check_for_updates() -> Result<UpdateStatus, String> {
     let latest = release.tag_name.trim_start_matches('v').to_string();
     let has_update = is_newer(&latest, &current);
 
+    // Defense in depth: only forward `html_url` to the UI if it's actually
+    // a github.com URL. TLS already authenticates the response, but a
+    // malformed manifest or a misconfigured fork shouldn't be able to
+    // route the user's browser to `javascript:`, `file:`, or some random
+    // host via the "View release" button.
+    let release_url = if release.html_url.starts_with("https://github.com/") {
+        Some(release.html_url)
+    } else {
+        log::warn!(
+            "update check: dropping non-github release URL: {}",
+            release.html_url
+        );
+        None
+    };
+
     Ok(UpdateStatus {
         current_version: current,
         latest_version: Some(latest),
         has_update,
-        release_url: Some(release.html_url),
+        release_url,
     })
 }
 
