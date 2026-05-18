@@ -18,10 +18,10 @@ pub mod windows;
 use capture::XcapCapturer;
 use commands::{
     check_for_updates, consume_pending_scan, copy_row, copy_rows_as_json, copy_to_clipboard,
-    get_app_info, get_default_settings, get_hotkey_status, get_screenshot_monitor_png,
-    get_screenshot_monitors, get_settings, hide_results_window, history_clear, history_delete,
-    history_delete_bulk, history_query, open_screen_recording_prefs, open_url, open_urls_bulk,
-    scan_region, scan_screen, set_settings, AppState,
+    decode_image_file, get_app_info, get_default_settings, get_hotkey_status,
+    get_screenshot_monitor_png, get_screenshot_monitors, get_settings, hide_results_window,
+    history_clear, history_delete, history_delete_bulk, history_query, open_screen_recording_prefs,
+    open_url, open_urls_bulk, scan_region, scan_screen, set_settings, AppState,
 };
 use decoder::RqrrDecoder;
 use screenshot::ScreenshotStore;
@@ -58,6 +58,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             scan_screen,
             scan_region,
+            decode_image_file,
             copy_to_clipboard,
             copy_row,
             copy_rows_as_json,

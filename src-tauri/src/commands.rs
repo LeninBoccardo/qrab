@@ -124,6 +124,80 @@ pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, Strin
     })
 }
 
+/// Sentinel monitor index for rows whose image came from a file instead
+/// of a screen capture. The schema requires NOT NULL, so we use -1
+/// rather than introducing a nullable column and a migration.
+const FILE_SOURCE_MONITOR_INDEX: i64 = -1;
+
+/// Decode a QR code from an image file on disk. Same persistence path as
+/// `scan_screen`, but the held-screenshot store is left untouched —
+/// region select doesn't apply, so the returned `screenshot_id` is empty.
+/// Supports PNG, JPEG, and WebP (the image crate features wired in
+/// Cargo.toml).
+#[tauri::command]
+pub async fn decode_image_file(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<ScanResult, String> {
+    log::info!("decode_image_file: path={path}");
+    let decoder = state.decoder.clone();
+    let storage = state.storage.clone();
+    let scanned_at = current_epoch_ms();
+    let batch_id = Ulid::new().to_string();
+    let batch_log = batch_id.clone();
+
+    let rows: Vec<ScanRow> =
+        tokio::task::spawn_blocking(move || -> Result<Vec<ScanRow>, String> {
+            let img = image::open(&path)
+                .map_err(|e| format!("could not open '{path}': {e}"))?
+                .to_rgba8();
+            let started = Instant::now();
+            let decoded = decoder.decode(&img);
+            log::info!(
+                "decode_image_file: {}x{} found={} took={}ms",
+                img.width(),
+                img.height(),
+                decoded.len(),
+                started.elapsed().as_millis()
+            );
+            let mut seen: HashSet<String> = HashSet::new();
+            let mut rows = Vec::new();
+            for content in decoded {
+                if !seen.insert(content.clone()) {
+                    continue;
+                }
+                let kind = classify_kind(&content);
+                rows.push(ScanRow {
+                    id: -1,
+                    batch_id: batch_id.clone(),
+                    content,
+                    kind,
+                    monitor_index: FILE_SOURCE_MONITOR_INDEX,
+                    scanned_at,
+                    opened: false,
+                    opened_at: None,
+                    copied: false,
+                    copied_at: None,
+                });
+            }
+            persist_rows(&storage, &mut rows)?;
+            Ok(rows)
+        })
+        .await
+        .map_err(|e| format!("file decode task panicked: {e}"))??;
+
+    log::info!(
+        "decode_image_file: decoded {} code(s), batch={}",
+        rows.len(),
+        batch_log
+    );
+    // No screenshot held — region select doesn't apply to file scans.
+    Ok(ScanResult {
+        rows,
+        screenshot_id: String::new(),
+    })
+}
+
 /// Decode a sub-rectangle of a previously-held screenshot.
 ///
 /// The frontend passes the `screenshot_id` it received from `scan_screen`

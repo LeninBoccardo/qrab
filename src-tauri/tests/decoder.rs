@@ -45,6 +45,26 @@ fn returns_empty_on_image_without_qr() {
 }
 
 #[test]
+fn decodes_qr_loaded_from_a_png_file_on_disk() {
+    // Round-trips the `decode_image_file` IPC path: render → write to a
+    // temp PNG → image::open → decoder. Anything that breaks the
+    // disk-load path (image-crate features, format detection, etc.)
+    // fails here before the IPC command sees it.
+    let img = render_qr("https://from-file.test/payload");
+    let tmp =
+        std::env::temp_dir().join(format!("qrab-decode-from-file-{}.png", std::process::id()));
+    img.save(&tmp).expect("save fixture png");
+
+    let loaded = image::open(&tmp).expect("image::open").to_rgba8();
+    let results = RqrrDecoder::new().decode(&loaded);
+
+    // Best-effort cleanup; not fatal if it fails.
+    let _ = std::fs::remove_file(&tmp);
+
+    assert_eq!(results, vec!["https://from-file.test/payload".to_string()]);
+}
+
+#[test]
 fn decodes_two_codes_in_one_image() {
     let a = render_qr("first");
     let b = render_qr("second");
