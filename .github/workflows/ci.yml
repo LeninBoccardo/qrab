@@ -31,6 +31,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          # Match the Ubuntu build job's shared-key so its cold compile
+          # benefits from this job's warm cargo cache.
+          shared-key: ubuntu-latest
 
       - name: Install Tauri Linux system deps
         run: |
