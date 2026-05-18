@@ -581,6 +581,22 @@ pub struct AppInfo {
     pub description: &'static str,
 }
 
+/// Manual update check — hits `api.github.com` per the CLAUDE.md §5
+/// carve-out. Returns the latest release tag and a flag indicating
+/// whether it's newer than the running version.
+#[tauri::command]
+pub async fn check_for_updates() -> Result<crate::update::UpdateStatus, String> {
+    log::info!("check_for_updates: invoked");
+    let status = crate::update::check_for_updates().await?;
+    log::info!(
+        "check_for_updates: current={} latest={:?} has_update={}",
+        status.current_version,
+        status.latest_version,
+        status.has_update
+    );
+    Ok(status)
+}
+
 #[tauri::command]
 pub async fn get_app_info() -> Result<AppInfo, String> {
     Ok(AppInfo {

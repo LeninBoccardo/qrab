@@ -12,6 +12,7 @@ import type {
   ScanRow,
   ScreenshotMonitorMeta,
   Settings,
+  UpdateStatus,
 } from "./types";
 
 export const scanScreen = (): Promise<ScanResult> =>
@@ -106,6 +107,12 @@ export const getHotkeyStatus = (): Promise<HotkeyStatus> =>
 /** Open the macOS Screen Recording privacy pane. No-op elsewhere. */
 export const openScreenRecordingPrefs = (): Promise<void> =>
   invoke<void>("open_screen_recording_prefs");
+
+/** Hit api.github.com for the latest release tag and compare it against
+ *  the running version. CLAUDE.md §5 carve-out — only called from the
+ *  Config "Check for updates" button or the opt-in auto-check toggle. */
+export const checkForUpdates = (): Promise<UpdateStatus> =>
+  invoke<UpdateStatus>("check_for_updates");
 
 /** Event name the Rust hotkey handler emits on press. */
 export const SCAN_EVENT = "qrab:scan";

@@ -39,6 +39,10 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 ulid = "1"
 log = "0.4"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# Update-check HTTP client. rustls-tls keeps us off OpenSSL; no native
+# tls deps means the cross-platform CI build stays uniform. `json` pulls
+# in serde_json which is already a transitive dep via tauri/serde.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 [dev-dependencies]
 qrcode = { version = "0.14", default-features = false, features = ["image"] }

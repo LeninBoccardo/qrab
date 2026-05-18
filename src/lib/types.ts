@@ -106,6 +106,16 @@ export interface HotkeyStatus {
   registered: boolean;
 }
 
+/** Result of a manual or auto update check (CLAUDE.md §5 carve-out).
+ *  `latestVersion` and `releaseUrl` are non-null on a successful check;
+ *  failures return as IPC errors instead, not as null fields. */
+export interface UpdateStatus {
+  currentVersion: string;
+  latestVersion: string | null;
+  hasUpdate: boolean;
+  releaseUrl: string | null;
+}
+
 /** Mirrors `Settings` in src-tauri/src/settings.rs (CLAUDE.md §9). */
 export interface Settings {
   hotkey: string;
