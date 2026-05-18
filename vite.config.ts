@@ -32,12 +32,12 @@ export default defineConfig(async () => ({
         },
     },
 
-    // Vitest config — pure-function tests live alongside source as
-    // *.test.ts. jsdom environment lets format helpers that touch
-    // Date/Intl work without surprises; we don't render Solid components
-    // yet (that would need @solidjs/testing-library).
+    // Vitest config — tests live alongside source as `*.test.ts(x)`.
+    // jsdom + the global setup file enables both pure-function tests
+    // and Solid component tests via @solidjs/testing-library.
     test: {
         environment: "jsdom",
         include: ["src/**/*.test.{ts,tsx}"],
+        setupFiles: ["src/test/setup.ts"],
     },
 }));
