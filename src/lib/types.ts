@@ -11,11 +11,20 @@ export type QrKind =
   | "phone"
   | "other";
 
+/** Sentinel `monitorIndex` for rows whose source was a file decoded via
+ *  decode_image_file rather than a real screen capture. The SQLite
+ *  schema requires NOT NULL on `monitor_index`, so this constant beats
+ *  a nullable-column migration. Display code that formats a "Monitor N"
+ *  label should special-case this value as "from file". */
+export const FILE_SOURCE_MONITOR_INDEX = -1;
+
 export interface ScanRow {
   id: number;
   batchId: string;
   content: string;
   kind: QrKind;
+  /** Index of the captured monitor (0-based), or
+   *  [`FILE_SOURCE_MONITOR_INDEX`] (-1) for rows decoded from a file. */
   monitorIndex: number;
   /** Unix epoch milliseconds. */
   scannedAt: number;
