@@ -132,6 +132,50 @@ export const ResultsWindow: Component = () => {
     }
   }
 
+  /** Decode every supported image in `paths`, concatenate the resulting
+   *  rows into a single ScanResult, and toast a summary. Used by
+   *  drag-drop when the user drops more than one file at once. */
+  async function decodeFromFiles(paths: readonly string[]): Promise<void> {
+    if (loading()) return;
+    setLoading(true);
+    try {
+      const settled = await Promise.all(
+        paths.map((p) =>
+          decodeImageFile(p).then(
+            (r) => ({ ok: true as const, path: p, rows: r.rows }),
+            (err) => ({ ok: false as const, path: p, err: formatError(err) }),
+          ),
+        ),
+      );
+      const allRows: ScanRow[] = [];
+      let failedCount = 0;
+      for (const r of settled) {
+        if (r.ok) allRows.push(...r.rows);
+        else {
+          failedCount++;
+          void logInfo(`decode failed for ${r.path}: ${r.err}`);
+        }
+      }
+      // Empty screenshotId because no held screenshot — region select
+      // doesn't apply to file-sourced scans.
+      setScanResult({ rows: allRows, screenshotId: "" });
+      setFocusIdx(0);
+      setPermissionBlocked(false);
+
+      const decoded = settled.length - failedCount;
+      const parts = [
+        `Decoded ${decoded} of ${settled.length} ${
+          settled.length === 1 ? "file" : "files"
+        }`,
+      ];
+      if (failedCount > 0) parts.push(`${failedCount} failed`);
+      if (allRows.length === 0) parts.push("no QR codes found");
+      showToast(parts.join(", "));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function pickAndDecodeFile(): Promise<void> {
     try {
       const picked = await openFileDialog({
@@ -303,14 +347,22 @@ export const ResultsWindow: Component = () => {
     void getCurrentWebview()
       .onDragDropEvent((event) => {
         if (event.payload.type !== "drop") return;
-        const path = event.payload.paths.find(isSupportedImagePath);
-        if (!path) {
+        const imagePaths = event.payload.paths.filter(isSupportedImagePath);
+        const nonImage = event.payload.paths.length - imagePaths.length;
+        if (imagePaths.length === 0) {
           showToast(
             `Drop a ${supportedImageExtensions().join(", ").toUpperCase()} image`,
           );
           return;
         }
-        void decodeFromFile(path);
+        if (nonImage > 0) {
+          showToast(
+            `${nonImage} non-image ${
+              nonImage === 1 ? "file" : "files"
+            } skipped`,
+          );
+        }
+        void decodeFromFiles(imagePaths);
       })
       .then((fn) => {
         if (!alive) fn();
