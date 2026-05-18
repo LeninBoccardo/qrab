@@ -113,17 +113,44 @@ export function isSupportedImagePath(path: string): boolean {
 
 let autoUpdateCheckRan = false;
 
+/** localStorage key holding the timestamp (epoch ms) of the last auto
+ *  update check. Manual button clicks don't touch this — they always
+ *  query, since the user is explicitly asking. */
+const AUTO_CHECK_TS_KEY = "qrab.lastAutoUpdateCheckMs";
+
+/** Minimum time between auto update checks. The GitHub unauthenticated
+ *  REST API allows 60 requests per hour per IP; a 6 hour window keeps
+ *  us comfortably inside that even on shared-NAT networks where many
+ *  qrab users could plausibly hit the same egress IP at once, while
+ *  still catching new releases promptly. */
+const AUTO_CHECK_MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
 /** Idempotent: runs the update check at most once per app load, only if
- *  the user has opted into the auto-check toggle. Settings must already
- *  be loaded — call this *after* loadSettings(). Failures are logged to
- *  the per-launch log file and otherwise silent (no toast). */
+ *  the user has opted into the auto-check toggle AND
+ *  AUTO_CHECK_MIN_INTERVAL_MS has elapsed since the previous auto-check.
+ *  Settings must already be loaded — call this *after* loadSettings().
+ *  Failures are logged to the per-launch log file and otherwise silent. */
 export async function maybeRunAutoUpdateCheck(): Promise<void> {
   if (autoUpdateCheckRan) return;
   autoUpdateCheckRan = true;
   const s = settings();
   if (!s?.checkForUpdatesOnLaunch) return;
+
+  const lastRaw = readLastAutoCheck();
+  if (lastRaw !== null) {
+    const elapsed = Date.now() - lastRaw;
+    if (elapsed >= 0 && elapsed < AUTO_CHECK_MIN_INTERVAL_MS) {
+      void logInfo(
+        `auto update check: skipped (last ran ${Math.round(elapsed / 60_000)}m ago, ` +
+          `min ${AUTO_CHECK_MIN_INTERVAL_MS / 60_000}m)`,
+      );
+      return;
+    }
+  }
+
   void logInfo("auto update check: starting");
   await runUpdateCheck();
+  writeLastAutoCheck(Date.now());
   const result = updateStatus();
   const err = updateError();
   if (err) void logError(`auto update check failed: ${err}`);
@@ -132,4 +159,25 @@ export async function maybeRunAutoUpdateCheck(): Promise<void> {
       `auto update check: current=${result.currentVersion} ` +
         `latest=${result.latestVersion ?? "?"} hasUpdate=${result.hasUpdate}`,
     );
+}
+
+function readLastAutoCheck(): number | null {
+  try {
+    const raw = window.localStorage.getItem(AUTO_CHECK_TS_KEY);
+    if (raw === null) return null;
+    const n = Number.parseInt(raw, 10);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    // localStorage can throw in privacy modes / sandboxes; treat as
+    // "no record" rather than blowing up the check.
+    return null;
+  }
+}
+
+function writeLastAutoCheck(ms: number): void {
+  try {
+    window.localStorage.setItem(AUTO_CHECK_TS_KEY, String(ms));
+  } catch {
+    // Same: privacy-mode localStorage failure shouldn't crash the app.
+  }
 }
