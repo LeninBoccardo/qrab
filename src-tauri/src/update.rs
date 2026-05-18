@@ -28,10 +28,7 @@ fn http_client() -> &'static reqwest::Client {
     static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()
-            .user_agent(format!(
-                "qrab/{} update-check",
-                env!("CARGO_PKG_VERSION")
-            ))
+            .user_agent(format!("qrab/{} update-check", env!("CARGO_PKG_VERSION")))
             .timeout(std::time::Duration::from_secs(TIMEOUT_SECS))
             .build()
             .expect("reqwest::Client build with default rustls config")
