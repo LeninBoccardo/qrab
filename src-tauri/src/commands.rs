@@ -129,6 +129,42 @@ pub async fn scan_screen(state: State<'_, AppState>) -> Result<ScanResult, Strin
 /// rather than introducing a nullable column and a migration.
 const FILE_SOURCE_MONITOR_INDEX: i64 = -1;
 
+/// Hard cap on the encoded size of a file accepted by `decode_image_file`.
+/// 50 MB comfortably fits any real-world QR-bearing image (a 4K JPEG is
+/// ~5 MB; a 4K PNG ~10–20 MB) while shutting down accidental drops of
+/// huge raw / multi-layer files that would balloon decoded RAM.
+const MAX_INPUT_FILE_BYTES: u64 = 50 * 1024 * 1024;
+
+/// Hard cap on decoded pixel count. A 4K image is ~8.3 MP; 80 MP allows
+/// for ~8K and stitched panoramas while rejecting decompression-bomb
+/// PNGs (e.g. 100000×100000 transparent canvases) that would otherwise
+/// allocate tens of GB on the way to to_rgba8.
+const MAX_DECODED_PIXELS: u64 = 80_000_000;
+
+/// Pure check on encoded file size. Factored out so the cap is unit-testable
+/// without writing a real file to disk.
+fn check_input_file_size(len: u64) -> Result<(), String> {
+    if len > MAX_INPUT_FILE_BYTES {
+        Err(format!(
+            "image too large: {len} bytes (max {MAX_INPUT_FILE_BYTES})"
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+/// Pure check on the decoded pixel count.
+fn check_decoded_pixels(w: u32, h: u32) -> Result<(), String> {
+    let pixels = u64::from(w) * u64::from(h);
+    if pixels > MAX_DECODED_PIXELS {
+        Err(format!(
+            "image dimensions too large: {w}x{h} ({pixels} pixels, max {MAX_DECODED_PIXELS})"
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 /// Decode a QR code from an image file on disk. Same persistence path as
 /// `scan_screen`, but the held-screenshot store is left untouched —
 /// region select doesn't apply, so the returned `screenshot_id` is empty.
@@ -148,6 +184,25 @@ pub async fn decode_image_file(
 
     let rows: Vec<ScanRow> =
         tokio::task::spawn_blocking(move || -> Result<Vec<ScanRow>, String> {
+            // 1. Reject huge encoded files outright. Bounded source ⇒ bounded
+            //    decode RAM regardless of whatever ratio the format implies.
+            let meta =
+                std::fs::metadata(&path).map_err(|e| format!("could not stat '{path}': {e}"))?;
+            check_input_file_size(meta.len())?;
+
+            // 2. Read just the format header to learn the decoded dimensions
+            //    before we ask the image crate to allocate the RGBA buffer.
+            //    Catches decompression-bomb PNGs that the file-size cap can't.
+            let reader = image::ImageReader::open(&path)
+                .map_err(|e| format!("could not open '{path}': {e}"))?
+                .with_guessed_format()
+                .map_err(|e| format!("could not detect format for '{path}': {e}"))?;
+            let (w, h) = reader
+                .into_dimensions()
+                .map_err(|e| format!("could not read dimensions for '{path}': {e}"))?;
+            check_decoded_pixels(w, h)?;
+
+            // 3. Now the full decode is safe — bounded by both caps above.
             let img = image::open(&path)
                 .map_err(|e| format!("could not open '{path}': {e}"))?
                 .to_rgba8();
@@ -921,6 +976,42 @@ mod tests {
             h,
             monitor_index: 0,
         }
+    }
+
+    #[test]
+    fn check_input_file_size_accepts_below_cap() {
+        assert!(check_input_file_size(0).is_ok());
+        assert!(check_input_file_size(MAX_INPUT_FILE_BYTES).is_ok());
+    }
+
+    #[test]
+    fn check_input_file_size_rejects_above_cap() {
+        let err = check_input_file_size(MAX_INPUT_FILE_BYTES + 1).unwrap_err();
+        assert!(err.contains("too large"));
+        assert!(err.contains(&MAX_INPUT_FILE_BYTES.to_string()));
+    }
+
+    #[test]
+    fn check_decoded_pixels_accepts_realistic_dimensions() {
+        // 4K = 3840 × 2160 ≈ 8.3 MP
+        assert!(check_decoded_pixels(3840, 2160).is_ok());
+        // 8K = 7680 × 4320 ≈ 33 MP
+        assert!(check_decoded_pixels(7680, 4320).is_ok());
+    }
+
+    #[test]
+    fn check_decoded_pixels_rejects_above_cap() {
+        // 10000 × 10000 = 100 MP > 80 MP cap
+        let err = check_decoded_pixels(10_000, 10_000).unwrap_err();
+        assert!(err.contains("too large"));
+        assert!(err.contains("10000x10000"));
+    }
+
+    #[test]
+    fn check_decoded_pixels_rejects_decompression_bomb() {
+        // The classic PNG bomb: 100000 × 100000 transparent canvas
+        let err = check_decoded_pixels(100_000, 100_000).unwrap_err();
+        assert!(err.contains("too large"));
     }
 
     #[test]
