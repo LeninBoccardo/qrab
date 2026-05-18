@@ -8,10 +8,13 @@ import {
   Show,
 } from "solid-js";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import {
   AlertTriangle,
   Crop,
   ExternalLink,
+  FileImage,
   History,
   Loader2,
   ScanLine,
@@ -27,6 +30,7 @@ import { ConfirmOpenAll } from "../components/ConfirmOpenAll";
 import {
   consumePendingScan,
   copyRow as copyRowIpc,
+  decodeImageFile,
   hideResultsWindow,
   openScreenRecordingPrefs,
   openUrl,
@@ -102,9 +106,51 @@ export const ResultsWindow: Component = () => {
 
   function selectRegion(): void {
     const r = scanResult();
-    if (!r) return;
+    // No screenshot held for file-sourced scans — region select doesn't apply.
+    if (!r?.screenshotId) return;
     setActiveScreenshotId(r.screenshotId);
     window.location.hash = "region";
+  }
+
+  /** Image extensions accepted by the file picker and drag-drop. Must
+   *  stay in sync with the `image` crate features in Cargo.toml. */
+  const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp"] as const;
+
+  function hasImageExtension(path: string): boolean {
+    const lower = path.toLowerCase();
+    return IMAGE_EXTENSIONS.some((ext) => lower.endsWith(`.${ext}`));
+  }
+
+  async function decodeFromFile(path: string): Promise<void> {
+    if (loading()) return;
+    setLoading(true);
+    try {
+      const r = await decodeImageFile(path);
+      setScanResult(r);
+      setFocusIdx(0);
+      setPermissionBlocked(false);
+      if (r.rows.length === 0) {
+        showToast("No QR codes found in that image");
+      }
+    } catch (err) {
+      showToast(`File decode failed: ${formatError(err)}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function pickAndDecodeFile(): Promise<void> {
+    try {
+      const picked = await openFileDialog({
+        multiple: false,
+        directory: false,
+        filters: [{ name: "Images", extensions: [...IMAGE_EXTENSIONS] }],
+      });
+      if (typeof picked !== "string") return;
+      await decodeFromFile(picked);
+    } catch (err) {
+      showToast(`Couldn't open file: ${formatError(err)}`);
+    }
   }
 
   async function copyRow(row: ScanRow): Promise<void> {
@@ -232,6 +278,7 @@ export const ResultsWindow: Component = () => {
     // "scan-on-route-change" symptom.
     let alive = true;
     let unlistenFn: UnlistenFn | null = null;
+    let unlistenDragDrop: UnlistenFn | null = null;
 
     void listen(SCAN_EVENT, () => {
       void logInfo("scan(): triggered via SCAN_EVENT");
@@ -245,6 +292,23 @@ export const ResultsWindow: Component = () => {
         unlistenFn = fn;
       }
     });
+
+    // Drag-and-drop: accept image files dropped anywhere on the
+    // results window. Same alive-guard pattern as the scan listener.
+    void getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (event.payload.type !== "drop") return;
+        const path = event.payload.paths.find(hasImageExtension);
+        if (!path) {
+          showToast("Drop a PNG, JPEG, or WebP image");
+          return;
+        }
+        void decodeFromFile(path);
+      })
+      .then((fn) => {
+        if (!alive) fn();
+        else unlistenDragDrop = fn;
+      });
 
     // Cold-WebView2 path: hotkey fired before our SCAN_EVENT listener
     // attached. consume_pending_scan atomically clears + returns the flag.
@@ -260,6 +324,7 @@ export const ResultsWindow: Component = () => {
       alive = false;
       window.removeEventListener("keydown", onKeyDown);
       unlistenFn?.();
+      unlistenDragDrop?.();
     });
   });
 
@@ -333,9 +398,18 @@ export const ResultsWindow: Component = () => {
           </Button>
         </Show>
         <Button
+          variant="ghost"
+          onClick={() => void pickAndDecodeFile()}
+          disabled={loading()}
+          title="Decode a QR code from an image file (PNG, JPEG, WebP)"
+        >
+          <FileImage size={16} />
+          Open file…
+        </Button>
+        <Button
           variant="secondary"
           onClick={selectRegion}
-          disabled={!scanResult()}
+          disabled={!scanResult()?.screenshotId}
           title="Refine by selecting a region of the screenshot"
         >
           <Crop size={16} />

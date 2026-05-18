@@ -24,6 +24,12 @@ export const scanRegion = (
 ): Promise<ScanResult> =>
   invoke<ScanResult>("scan_region", { screenshotId, bounds });
 
+/** Decode QR codes from an image file already on disk (PNG / JPEG / WebP).
+ *  Same persistence path as `scan_screen`; the returned ScanResult has
+ *  an empty `screenshotId` because no screenshot is held. */
+export const decodeImageFile = (path: string): Promise<ScanResult> =>
+  invoke<ScanResult>("decode_image_file", { path });
+
 export const copyToClipboard = (text: string): Promise<void> =>
   invoke<void>("copy_to_clipboard", { text });
 

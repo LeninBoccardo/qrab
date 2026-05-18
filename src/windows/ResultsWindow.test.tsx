@@ -10,6 +10,17 @@ vi.mock("@tauri-apps/api/event", () => ({
   listen: (...args: unknown[]) => listenMock(...args),
 }));
 
+const dragDropUnlistenMock = vi.fn();
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: () => ({
+    onDragDropEvent: vi.fn().mockResolvedValue(dragDropUnlistenMock),
+  }),
+}));
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  open: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("../lib/log", () => ({
   info: vi.fn(),
   error: vi.fn(),
@@ -19,6 +30,7 @@ vi.mock("../lib/log", () => ({
 vi.mock("../lib/ipc", () => ({
   scanScreen: vi.fn(),
   scanRegion: vi.fn(),
+  decodeImageFile: vi.fn(),
   copyToClipboard: vi.fn(),
   copyRow: vi.fn().mockResolvedValue(undefined),
   copyRowsAsJson: vi.fn(),
