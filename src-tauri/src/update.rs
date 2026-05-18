@@ -6,6 +6,7 @@
 //! No payload beyond the request itself is sent.
 
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 
 /// Owner / repo qrab releases live under. Centralised so a fork can
 /// point at its own repo with a single edit + recompile.
@@ -14,6 +15,28 @@ const REPO: &str = "LeninBoccardo/qrab";
 /// HTTP timeout. GitHub usually responds in well under a second; cap at
 /// 8 s so a flaky network never wedges the UI behind a spinner.
 const TIMEOUT_SECS: u64 = 8;
+
+/// Process-wide reqwest client. reqwest's docs recommend reusing one
+/// across calls so the connection pool, DNS cache, and TLS session cache
+/// pay off across the (manual + auto) update checks the app makes per
+/// launch. Built lazily on first use.
+fn http_client() -> &'static reqwest::Client {
+    // `.expect()` is normally banned in production paths (CLAUDE.md §15);
+    // `reqwest::Client::build()` only fails on invalid TLS configuration,
+    // and we don't supply any custom TLS bits — so this is unreachable
+    // for the configuration we ship.
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .user_agent(format!(
+                "qrab/{} update-check",
+                env!("CARGO_PKG_VERSION")
+            ))
+            .timeout(std::time::Duration::from_secs(TIMEOUT_SECS))
+            .build()
+            .expect("reqwest::Client build with default rustls config")
+    })
+}
 
 /// Result of an update check. `latest_version` and `release_url` are
 /// `None` only when the GET failed; the caller should treat the error
@@ -40,13 +63,7 @@ pub async fn check_for_updates() -> Result<UpdateStatus, String> {
     let current = env!("CARGO_PKG_VERSION").to_string();
     let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
 
-    let client = reqwest::Client::builder()
-        .user_agent(format!("qrab/{current} update-check"))
-        .timeout(std::time::Duration::from_secs(TIMEOUT_SECS))
-        .build()
-        .map_err(|e| format!("http client: {e}"))?;
-
-    let resp = client
+    let resp = http_client()
         .get(&url)
         .header("Accept", "application/vnd.github+json")
         .send()
