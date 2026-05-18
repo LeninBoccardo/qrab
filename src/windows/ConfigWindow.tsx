@@ -11,42 +11,27 @@ import { Button } from "../components/ui/Button";
 import * as Switch from "../components/ui/Switch";
 import { Toaster, showToast } from "../components/ui/Toast";
 import { formatError } from "../lib/format";
+import { getAppInfo, hideResultsWindow } from "../lib/ipc";
 import {
-  checkForUpdates,
-  getAppInfo,
-  hideResultsWindow,
-} from "../lib/ipc";
-import { loadSettings, saveSettings, settings } from "../lib/state";
-import type { Settings, UpdateStatus } from "../lib/types";
+  loadSettings,
+  runUpdateCheck,
+  saveSettings,
+  settings,
+  updateChecking,
+  updateError,
+  updateStatus,
+} from "../lib/state";
+import type { Settings } from "../lib/types";
 import { openUrl as openExternal } from "@tauri-apps/plugin-opener";
 import primaryLogo from "../../docs/branding/extracted/primary-logo.png";
 
 export const ConfigWindow: Component = () => {
   const [info] = createResource(getAppInfo);
   const [saving, setSaving] = createSignal(false);
-  const [checking, setChecking] = createSignal(false);
-  const [updateStatus, setUpdateStatus] = createSignal<UpdateStatus | null>(
-    null,
-  );
-  const [updateError, setUpdateError] = createSignal<string | null>(null);
 
   onMount(() => {
     if (!settings()) void loadSettings();
   });
-
-  async function runUpdateCheck(): Promise<void> {
-    setChecking(true);
-    setUpdateError(null);
-    try {
-      const status = await checkForUpdates();
-      setUpdateStatus(status);
-    } catch (err) {
-      setUpdateStatus(null);
-      setUpdateError(formatError(err));
-    } finally {
-      setChecking(false);
-    }
-  }
 
   async function openReleasePage(): Promise<void> {
     const url = updateStatus()?.releaseUrl;
@@ -73,6 +58,12 @@ export const ConfigWindow: Component = () => {
     const current = settings();
     if (!current) return;
     void save({ ...current, autostart: next });
+  }
+
+  function toggleAutoCheck(next: boolean): void {
+    const current = settings();
+    if (!current) return;
+    void save({ ...current, checkForUpdatesOnLaunch: next });
   }
 
   return (
@@ -138,16 +129,16 @@ export const ConfigWindow: Component = () => {
             Updates
           </h2>
           <p class="text-xs text-neutral-500 dark:text-neutral-400">
-            Compares the running version with the latest GitHub release.
-            One GET to api.github.com per check — nothing else is sent.
+            Compares the running version with the latest GitHub release. One GET
+            to api.github.com per check — nothing else is sent.
           </p>
           <div class="flex items-center gap-3">
             <Button
               variant="secondary"
               onClick={() => void runUpdateCheck()}
-              disabled={checking()}
+              disabled={updateChecking()}
             >
-              {checking() ? (
+              {updateChecking() ? (
                 <>
                   <Loader2 size={14} class="animate-spin" /> Checking…
                 </>
@@ -155,7 +146,7 @@ export const ConfigWindow: Component = () => {
                 "Check for updates"
               )}
             </Button>
-            <Show when={!checking() && updateStatus()}>
+            <Show when={!updateChecking() && updateStatus()}>
               {(s) => (
                 <Show
                   when={s().hasUpdate && s().latestVersion}
@@ -163,7 +154,8 @@ export const ConfigWindow: Component = () => {
                     <span class="text-xs text-neutral-500 dark:text-neutral-400">
                       You're on the latest version
                       <Show when={s().latestVersion}>
-                        {" "}(v{s().latestVersion})
+                        {" "}
+                        (v{s().latestVersion})
                       </Show>
                       .
                     </span>
@@ -186,12 +178,33 @@ export const ConfigWindow: Component = () => {
                 </Show>
               )}
             </Show>
-            <Show when={!checking() && updateError()}>
+            <Show when={!updateChecking() && updateError()}>
               <span class="text-xs text-amber-700 dark:text-amber-400">
                 Couldn't check: {updateError()}
               </span>
             </Show>
           </div>
+          <Show when={settings()}>
+            {(s) => (
+              <Switch.Root
+                checked={s().checkForUpdatesOnLaunch}
+                onChange={toggleAutoCheck}
+                class="flex items-start justify-between gap-4 pt-1"
+              >
+                <div class="flex flex-col">
+                  <Switch.Label>Automatically check on launch</Switch.Label>
+                  <Switch.Description>
+                    Runs the check above once each time qrab starts. Off by
+                    default.
+                  </Switch.Description>
+                </div>
+                <Switch.Input class="sr-only" />
+                <Switch.Control>
+                  <Switch.Thumb />
+                </Switch.Control>
+              </Switch.Root>
+            )}
+          </Show>
         </section>
 
         <div class="border-t border-neutral-200/60 dark:border-neutral-800/60" />

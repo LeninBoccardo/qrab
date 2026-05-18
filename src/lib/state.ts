@@ -3,12 +3,13 @@
 
 import { createSignal } from "solid-js";
 import {
+  checkForUpdates as checkForUpdatesIpc,
   getSettings as getSettingsIpc,
   setSettings as setSettingsIpc,
 } from "./ipc";
-import { error as logError } from "./log";
+import { error as logError, info as logInfo } from "./log";
 import { applyTheme, watchSystemTheme } from "./theme";
-import type { ScanResult, Settings } from "./types";
+import type { ScanResult, Settings, UpdateStatus } from "./types";
 
 /** The current scan result on display. Set by scan_screen (ResultsWindow)
  *  and by scan_region (RegionSelectWindow); read by ResultsWindow. */
@@ -51,4 +52,56 @@ export async function saveSettings(next: Settings): Promise<void> {
   applyTheme(next.theme);
   watchSystemTheme(next.theme);
   await setSettingsIpc(next);
+}
+
+/** Latest update-check result (manual button or auto-check on launch).
+ *  `null` until any check has run. Surfaced in ConfigWindow. */
+export const [updateStatus, setUpdateStatus] =
+  createSignal<UpdateStatus | null>(null);
+
+/** Error string from the most recent failed update check, or null if
+ *  the most recent attempt succeeded (or no attempt has run yet). */
+export const [updateError, setUpdateError] = createSignal<string | null>(null);
+
+/** Set while an update check is in flight. Drives the button's spinner. */
+export const [updateChecking, setUpdateChecking] = createSignal(false);
+
+/** Run a single update check and write the result to the module signals.
+ *  Caller doesn't need to track loading state — `updateChecking` is set
+ *  for the duration. Safe to call from anywhere. */
+export async function runUpdateCheck(): Promise<void> {
+  setUpdateChecking(true);
+  setUpdateError(null);
+  try {
+    const status = await checkForUpdatesIpc();
+    setUpdateStatus(status);
+  } catch (err) {
+    setUpdateStatus(null);
+    setUpdateError(err instanceof Error ? err.message : String(err));
+  } finally {
+    setUpdateChecking(false);
+  }
+}
+
+let autoUpdateCheckRan = false;
+
+/** Idempotent: runs the update check at most once per app load, only if
+ *  the user has opted into the auto-check toggle. Settings must already
+ *  be loaded — call this *after* loadSettings(). Failures are logged to
+ *  the per-launch log file and otherwise silent (no toast). */
+export async function maybeRunAutoUpdateCheck(): Promise<void> {
+  if (autoUpdateCheckRan) return;
+  autoUpdateCheckRan = true;
+  const s = settings();
+  if (!s?.checkForUpdatesOnLaunch) return;
+  void logInfo("auto update check: starting");
+  await runUpdateCheck();
+  const result = updateStatus();
+  const err = updateError();
+  if (err) void logError(`auto update check failed: ${err}`);
+  else if (result)
+    void logInfo(
+      `auto update check: current=${result.currentVersion} ` +
+        `latest=${result.latestVersion ?? "?"} hasUpdate=${result.hasUpdate}`,
+    );
 }

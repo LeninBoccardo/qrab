@@ -31,6 +31,11 @@ pub struct Settings {
     pub theme: Theme,
     pub close_after_copy: bool,
     pub close_after_open: bool,
+    /// Opt-in: when true, qrab pings `api.github.com` once per launch to
+    /// check for a newer release. Default `false` per the CLAUDE.md §5
+    /// privacy posture — the user has to flip this themselves.
+    #[serde(default)]
+    pub check_for_updates_on_launch: bool,
 }
 
 impl Default for Settings {
@@ -42,6 +47,7 @@ impl Default for Settings {
             theme: Theme::System,
             close_after_copy: false,
             close_after_open: false,
+            check_for_updates_on_launch: false,
         }
     }
 }
@@ -156,6 +162,7 @@ mod tests {
         assert_eq!(s.theme, Theme::System);
         assert!(!s.close_after_copy);
         assert!(!s.close_after_open);
+        assert!(!s.check_for_updates_on_launch);
     }
 
     #[test]

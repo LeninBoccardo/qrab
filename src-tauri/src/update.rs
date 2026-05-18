@@ -58,8 +58,7 @@ pub async fn check_for_updates() -> Result<UpdateStatus, String> {
         return Err(format!("github responded {status}"));
     }
 
-    let release: GitHubRelease =
-        resp.json().await.map_err(|e| format!("parse: {e}"))?;
+    let release: GitHubRelease = resp.json().await.map_err(|e| format!("parse: {e}"))?;
     let latest = release.tag_name.trim_start_matches('v').to_string();
     let has_update = is_newer(&latest, &current);
 

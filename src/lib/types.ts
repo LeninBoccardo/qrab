@@ -124,4 +124,7 @@ export interface Settings {
   theme: Theme;
   closeAfterCopy: boolean;
   closeAfterOpen: boolean;
+  /** Opt-in: when true, qrab pings api.github.com once per launch to
+   *  check for a newer release. Default false. */
+  checkForUpdatesOnLaunch: boolean;
 }
