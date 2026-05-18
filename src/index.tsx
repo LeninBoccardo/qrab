@@ -2,7 +2,11 @@
 import { render } from "solid-js/web";
 import "./styles.css";
 import App from "./App";
-import { loadSettings, maybeRunAutoUpdateCheck } from "./lib/state";
+import {
+  loadSettings,
+  loadSupportedImageExtensions,
+  maybeRunAutoUpdateCheck,
+} from "./lib/state";
 import { info, installGlobalErrorLogging } from "./lib/log";
 
 installGlobalErrorLogging();
@@ -13,5 +17,9 @@ void info(`webview loaded (route: ${window.location.hash || "#"})`);
 // fire-and-forget; consumers treat `settings()` being null as "not
 // loaded yet" and fall back gracefully.
 void loadSettings().then(() => maybeRunAutoUpdateCheck());
+
+// Prime the cached image-extension list so file-picker filters and
+// drag-drop checks resolve synchronously after the first paint.
+void loadSupportedImageExtensions();
 
 render(() => <App />, document.getElementById("root") as HTMLElement);

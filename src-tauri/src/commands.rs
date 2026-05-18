@@ -141,6 +141,24 @@ const MAX_INPUT_FILE_BYTES: u64 = 50 * 1024 * 1024;
 /// allocate tens of GB on the way to to_rgba8.
 const MAX_DECODED_PIXELS: u64 = 80_000_000;
 
+/// Image file extensions accepted by `decode_image_file`. Single source
+/// of truth — exposed to the frontend via `get_supported_image_extensions`
+/// so the file-picker filter and drag-drop allow-list can't drift from
+/// what the backend actually supports. Adding a new format here requires
+/// the matching feature in the `image` crate (see Cargo.toml).
+const SUPPORTED_IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];
+
+/// Returns the lowercase extensions [`decode_image_file`] accepts (without
+/// leading dot). Frontend uses this to populate the open-file dialog and
+/// to filter drag-and-drop payloads before invoking the decode IPC.
+#[tauri::command]
+pub async fn get_supported_image_extensions() -> Result<Vec<String>, String> {
+    Ok(SUPPORTED_IMAGE_EXTENSIONS
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect())
+}
+
 /// Pure check on encoded file size. Factored out so the cap is unit-testable
 /// without writing a real file to disk.
 fn check_input_file_size(len: u64) -> Result<(), String> {

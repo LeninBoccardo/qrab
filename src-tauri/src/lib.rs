@@ -19,9 +19,10 @@ use capture::XcapCapturer;
 use commands::{
     check_for_updates, consume_pending_scan, copy_row, copy_rows_as_json, copy_to_clipboard,
     decode_image_file, get_app_info, get_default_settings, get_hotkey_status,
-    get_screenshot_monitor_png, get_screenshot_monitors, get_settings, hide_results_window,
-    history_clear, history_delete, history_delete_bulk, history_query, open_screen_recording_prefs,
-    open_url, open_urls_bulk, scan_region, scan_screen, set_settings, AppState,
+    get_screenshot_monitor_png, get_screenshot_monitors, get_settings,
+    get_supported_image_extensions, hide_results_window, history_clear, history_delete,
+    history_delete_bulk, history_query, open_screen_recording_prefs, open_url, open_urls_bulk,
+    scan_region, scan_screen, set_settings, AppState,
 };
 use decoder::RqrrDecoder;
 use screenshot::ScreenshotStore;
@@ -79,7 +80,8 @@ pub fn run() {
             get_app_info,
             get_hotkey_status,
             open_screen_recording_prefs,
-            check_for_updates
+            check_for_updates,
+            get_supported_image_extensions
         ])
         .setup(|app| {
             log::info!(

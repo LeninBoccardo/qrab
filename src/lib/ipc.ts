@@ -120,5 +120,12 @@ export const openScreenRecordingPrefs = (): Promise<void> =>
 export const checkForUpdates = (): Promise<UpdateStatus> =>
   invoke<UpdateStatus>("check_for_updates");
 
+/** Lowercase image extensions (without leading dot) that
+ *  `decodeImageFile` accepts. Single source of truth — sourced from
+ *  Rust so the file-picker filter and drag-drop allow-list can't drift
+ *  from what the backend actually supports. */
+export const getSupportedImageExtensions = (): Promise<string[]> =>
+  invoke<string[]>("get_supported_image_extensions");
+
 /** Event name the Rust hotkey handler emits on press. */
 export const SCAN_EVENT = "qrab:scan";

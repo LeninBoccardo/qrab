@@ -5,6 +5,7 @@ import { createSignal } from "solid-js";
 import {
   checkForUpdates as checkForUpdatesIpc,
   getSettings as getSettingsIpc,
+  getSupportedImageExtensions as getSupportedImageExtensionsIpc,
   setSettings as setSettingsIpc,
 } from "./ipc";
 import { error as logError, info as logInfo } from "./log";
@@ -81,6 +82,33 @@ export async function runUpdateCheck(): Promise<void> {
   } finally {
     setUpdateChecking(false);
   }
+}
+
+/** Lowercase image extensions (without leading dot) accepted by the
+ *  backend's decode_image_file IPC. Loaded once at startup via
+ *  loadSupportedImageExtensions; empty until then. */
+export const [supportedImageExtensions, setSupportedImageExtensions] =
+  createSignal<readonly string[]>([]);
+
+/** Fetch the supported image extensions from the backend and cache them
+ *  in the module signal. Fire-and-forget at app start; safe to call
+ *  multiple times — the cache survives the second call. */
+export async function loadSupportedImageExtensions(): Promise<void> {
+  try {
+    const exts = await getSupportedImageExtensionsIpc();
+    setSupportedImageExtensions(exts.map((e) => e.toLowerCase()));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    void logError(`loadSupportedImageExtensions failed: ${msg}`);
+  }
+}
+
+/** Returns true iff `path` ends in one of the cached extensions. False
+ *  while the cache is still loading — the caller should treat that as
+ *  "reject" rather than "accept blindly". */
+export function isSupportedImagePath(path: string): boolean {
+  const lower = path.toLowerCase();
+  return supportedImageExtensions().some((ext) => lower.endsWith(`.${ext}`));
 }
 
 let autoUpdateCheckRan = false;

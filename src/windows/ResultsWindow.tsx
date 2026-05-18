@@ -42,10 +42,12 @@ import { info as logInfo } from "../lib/log";
 import { planOpenAll } from "../lib/bulkOpen";
 import { formatError } from "../lib/format";
 import {
+  isSupportedImagePath,
   scanResult,
   setActiveScreenshotId,
   setScanResult,
   settings,
+  supportedImageExtensions,
 } from "../lib/state";
 import type { ScanRow } from "../lib/types";
 
@@ -112,15 +114,6 @@ export const ResultsWindow: Component = () => {
     window.location.hash = "region";
   }
 
-  /** Image extensions accepted by the file picker and drag-drop. Must
-   *  stay in sync with the `image` crate features in Cargo.toml. */
-  const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp"] as const;
-
-  function hasImageExtension(path: string): boolean {
-    const lower = path.toLowerCase();
-    return IMAGE_EXTENSIONS.some((ext) => lower.endsWith(`.${ext}`));
-  }
-
   async function decodeFromFile(path: string): Promise<void> {
     if (loading()) return;
     setLoading(true);
@@ -144,9 +137,21 @@ export const ResultsWindow: Component = () => {
       const picked = await openFileDialog({
         multiple: false,
         directory: false,
-        filters: [{ name: "Images", extensions: [...IMAGE_EXTENSIONS] }],
+        filters: [
+          { name: "Images", extensions: [...supportedImageExtensions()] },
+        ],
       });
       if (typeof picked !== "string") return;
+      // Some platforms / dialog configurations let the user bypass the
+      // extension filter (typing a path, switching to "All files"); the
+      // backend would reject the file with an opaque error. Catch it
+      // here for a clearer message.
+      if (!isSupportedImagePath(picked)) {
+        showToast(
+          `Unsupported file type — pick a ${supportedImageExtensions().join(", ").toUpperCase()} image`,
+        );
+        return;
+      }
       await decodeFromFile(picked);
     } catch (err) {
       showToast(`Couldn't open file: ${formatError(err)}`);
@@ -298,9 +303,11 @@ export const ResultsWindow: Component = () => {
     void getCurrentWebview()
       .onDragDropEvent((event) => {
         if (event.payload.type !== "drop") return;
-        const path = event.payload.paths.find(hasImageExtension);
+        const path = event.payload.paths.find(isSupportedImagePath);
         if (!path) {
-          showToast("Drop a PNG, JPEG, or WebP image");
+          showToast(
+            `Drop a ${supportedImageExtensions().join(", ").toUpperCase()} image`,
+          );
           return;
         }
         void decodeFromFile(path);
